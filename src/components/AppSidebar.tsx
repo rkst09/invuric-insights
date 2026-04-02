@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   FolderPlus,
@@ -9,10 +10,10 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, active: true },
-  { label: "New Project", icon: FolderPlus, active: false },
-  { label: "History", icon: Clock, active: false },
-  { label: "Settings", icon: Settings, active: false },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/" },
+  { label: "New Project", icon: FolderPlus, path: "/document-generation" },
+  { label: "History", icon: Clock, path: "/history" },
+  { label: "Settings", icon: Settings, path: "/settings" },
 ];
 
 const AppSidebar = ({ activeItem = "Dashboard" }: { activeItem?: string }) => {
