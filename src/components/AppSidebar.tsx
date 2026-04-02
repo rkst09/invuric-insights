@@ -18,6 +18,7 @@ const navItems = [
 
 const AppSidebar = ({ activeItem = "Dashboard" }: { activeItem?: string }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <>
