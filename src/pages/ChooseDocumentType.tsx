@@ -74,7 +74,10 @@ const ChooseDocumentType = () => {
   };
 
   const handleContinue = () => {
-    if (selected) continueToNextStep(selected);
+    if (selected) {
+      continueToNextStep(selected);
+      navigate(`/choose-path?type=${selected}`);
+    }
   };
 
   const handleBack = () => {
