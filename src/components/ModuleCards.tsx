@@ -6,6 +6,7 @@ import {
   MessageSquare,
   ArrowRight,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { openModule } from "@/lib/api";
 
 const modules = [
