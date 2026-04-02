@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import ChooseDocumentType from "./pages/ChooseDocumentType.tsx";
 import ChoosePath from "./pages/ChoosePath.tsx";
+import PreviousProjects from "./pages/PreviousProjects.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -20,6 +21,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/document-generation" element={<ChooseDocumentType />} />
           <Route path="/choose-path" element={<ChoosePath />} />
+          <Route path="/history" element={<PreviousProjects />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

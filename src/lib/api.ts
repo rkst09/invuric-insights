@@ -34,3 +34,47 @@ export const openDocumentGuide = () => {
 export const navigateBack = () => {
   console.log("[API] navigateBack called");
 };
+
+export const fetchProjects = (filter: string) => {
+  console.log("[API] fetchProjects called:", filter);
+};
+
+export const searchProjects = (query: string) => {
+  console.log("[API] searchProjects called:", query);
+};
+
+export const openProjectDetail = (projectId: string) => {
+  console.log("[API] openProjectDetail called:", projectId);
+};
+
+export const closeProjectDetail = () => {
+  console.log("[API] closeProjectDetail called");
+};
+
+export const downloadDocument = (projectId: string, docType: string) => {
+  console.log("[API] downloadDocument called:", projectId, docType);
+};
+
+export const previewDocument = (projectId: string, docType: string) => {
+  console.log("[API] previewDocument called:", projectId, docType);
+};
+
+export const exportAllDocuments = (projectId: string) => {
+  console.log("[API] exportAllDocuments called:", projectId);
+};
+
+export const continueProject = (projectId: string) => {
+  console.log("[API] continueProject called:", projectId);
+};
+
+export const renameProject = (projectId: string) => {
+  console.log("[API] renameProject called:", projectId);
+};
+
+export const duplicateProject = (projectId: string) => {
+  console.log("[API] duplicateProject called:", projectId);
+};
+
+export const deleteProject = (projectId: string) => {
+  console.log("[API] deleteProject called:", projectId);
+};

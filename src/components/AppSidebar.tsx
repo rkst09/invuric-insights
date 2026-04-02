@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   FolderPlus,
@@ -9,14 +10,15 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, active: true },
-  { label: "New Project", icon: FolderPlus, active: false },
-  { label: "History", icon: Clock, active: false },
-  { label: "Settings", icon: Settings, active: false },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/" },
+  { label: "New Project", icon: FolderPlus, path: "/document-generation" },
+  { label: "History", icon: Clock, path: "/history" },
+  { label: "Settings", icon: Settings, path: "/settings" },
 ];
 
 const AppSidebar = ({ activeItem = "Dashboard" }: { activeItem?: string }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <>
@@ -68,6 +70,7 @@ const AppSidebar = ({ activeItem = "Dashboard" }: { activeItem?: string }) => {
           {navItems.map((item) => (
             <button
               key={item.label}
+              onClick={() => { navigate(item.path); setMobileOpen(false); }}
               className={`
                 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200
                 ${
