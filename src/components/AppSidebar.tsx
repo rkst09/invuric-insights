@@ -15,7 +15,7 @@ const navItems = [
   { label: "Settings", icon: Settings, active: false },
 ];
 
-const AppSidebar = () => {
+const AppSidebar = ({ activeItem = "Dashboard" }: { activeItem?: string }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
