@@ -18,3 +18,19 @@ export const downloadProject = (projectId: string) => {
 export const openProject = (projectId: string) => {
   console.log("[API] openProject called:", projectId);
 };
+
+export const selectDocumentType = (type: string) => {
+  console.log("[API] selectDocumentType called:", type);
+};
+
+export const continueToNextStep = (type: string) => {
+  console.log("[API] continueToNextStep called:", type);
+};
+
+export const openDocumentGuide = () => {
+  console.log("[API] openDocumentGuide called");
+};
+
+export const navigateBack = () => {
+  console.log("[API] navigateBack called");
+};
