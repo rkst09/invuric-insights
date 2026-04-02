@@ -15,7 +15,7 @@ const navItems = [
   { label: "Settings", icon: Settings, active: false },
 ];
 
-const AppSidebar = () => {
+const AppSidebar = ({ activeItem = "Dashboard" }: { activeItem?: string }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -71,7 +71,7 @@ const AppSidebar = () => {
               className={`
                 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200
                 ${
-                  item.active
+                  item.label === activeItem
                     ? "bg-secondary border-l-2 border-l-primary text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }

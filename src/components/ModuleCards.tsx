@@ -6,6 +6,7 @@ import {
   MessageSquare,
   ArrowRight,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { openModule } from "@/lib/api";
 
 const modules = [
@@ -52,12 +53,21 @@ const modules = [
 ];
 
 const ModuleCards = () => {
+  const navigate = useNavigate();
+
+  const handleClick = (modId: string) => {
+    openModule(modId);
+    if (modId === "doc-gen") {
+      navigate("/document-generation");
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
       {modules.map((mod, i) => (
         <button
           key={mod.id}
-          onClick={() => openModule(mod.id)}
+          onClick={() => handleClick(mod.id)}
           className="card-surface-hover p-6 text-left group animate-fade-up"
           style={{ animationDelay: `${i * 60}ms` }}
         >
