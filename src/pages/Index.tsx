@@ -1,16 +1,29 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import AppSidebar from "@/components/AppSidebar";
+import TopBar from "@/components/TopBar";
+import PipelineBanner from "@/components/PipelineBanner";
+import ModuleCards from "@/components/ModuleCards";
+import RecentProjects from "@/components/RecentProjects";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="flex min-h-screen bg-background">
+      <AppSidebar />
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopBar title="Dashboard" />
+
+        <main className="flex-1 overflow-y-auto">
+          <div className="glow-top">
+            <div className="max-w-7xl mx-auto px-6 lg:px-8 py-8 space-y-8">
+              <PipelineBanner />
+              <ModuleCards />
+              <RecentProjects />
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
