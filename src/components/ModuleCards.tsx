@@ -57,9 +57,11 @@ const ModuleCards = () => {
 
   const handleClick = (modId: string) => {
     openModule(modId);
-    if (modId === "doc-gen") {
-      navigate("/document-generation");
-    }
+    if (modId === "doc-gen") navigate("/document-generation");
+    if (modId === "pfd") navigate("/process-flow");
+    if (modId === "raid") navigate("/raid-document");
+    if (modId === "wbs") navigate("/wbs-generator");
+    if (modId === "user-stories") navigate("/user-stories");
   };
 
   return (

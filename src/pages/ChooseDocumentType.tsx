@@ -8,12 +8,7 @@ import {
   Code2,
   ArrowRight,
 } from "lucide-react";
-import {
-  selectDocumentType,
-  continueToNextStep,
-  openDocumentGuide,
-  navigateBack,
-} from "@/lib/api";
+import { openDocumentGuide, navigateBack } from "@/lib/api";
 
 type DocType = "SOW" | "PRD" | "FRD";
 
@@ -61,23 +56,25 @@ const documents: {
 const steps = ["Type", "Path", "Configure"];
 
 const ChooseDocumentType = () => {
-  const [selected, setSelected] = useState<DocType | null>(null);
+  const [activeCard, setActiveCard] = useState<DocType | null>(null);
+  const [isExiting, setIsExiting] = useState(false);
   const navigate = useNavigate();
 
   const handleSelect = (type: DocType) => {
-    if (selected === type) {
-      setSelected(null);
-    } else {
-      setSelected(type);
-      selectDocumentType(type);
-    }
-  };
+    if (activeCard) return; // prevent double-tap during animation
 
-  const handleContinue = () => {
-    if (selected) {
-      continueToNextStep(selected);
-      navigate(`/choose-path?type=${selected}`);
-    }
+    setActiveCard(type);
+
+    // Phase 1: card micro-interaction (120ms)
+    // Phase 2: page exit transition (starts at 120ms, lasts 180ms)
+    setTimeout(() => {
+      setIsExiting(true);
+    }, 120);
+
+    // Navigate after full animation completes
+    setTimeout(() => {
+      navigate(`/choose-path?type=${type}`);
+    }, 300);
   };
 
   const handleBack = () => {
@@ -85,13 +82,17 @@ const ChooseDocumentType = () => {
     navigate("/");
   };
 
-  const selectedDoc = documents.find((d) => d.type === selected);
-
   return (
     <div className="flex min-h-screen bg-background">
       <AppSidebar activeItem="New Project" />
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div
+        className="flex-1 flex flex-col min-w-0 transition-all duration-[180ms] ease-out"
+        style={{
+          opacity: isExiting ? 0 : 1,
+          transform: isExiting ? "translateY(-8px)" : "translateY(0)",
+        }}
+      >
         {/* Top area: breadcrumb + step indicator */}
         <div className="flex items-center justify-between px-6 lg:px-8 pt-6">
           {/* Breadcrumb */}
@@ -103,7 +104,10 @@ const ChooseDocumentType = () => {
               <ArrowLeft className="w-4 h-4" />
             </button>
             <nav className="font-mono-label text-xs tracking-wider flex items-center gap-1.5">
-              <span className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors duration-200" onClick={handleBack}>
+              <span
+                className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors duration-200"
+                onClick={handleBack}
+              >
                 Dashboard
               </span>
               <span className="text-[hsl(0_0%_20%)]">→</span>
@@ -157,28 +161,30 @@ const ChooseDocumentType = () => {
               {/* Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 justify-center">
                 {documents.map((doc, i) => {
-                  const isSelected = selected === doc.type;
-                  const hasSelection = selected !== null;
-                  const isDeselected = hasSelection && !isSelected;
+                  const isActive = activeCard === doc.type;
 
                   return (
                     <button
                       key={doc.type}
                       onClick={() => handleSelect(doc.type)}
+                      disabled={!!activeCard}
                       className={`
                         group relative text-left flex flex-col rounded-2xl p-8
-                        transition-all duration-200 cursor-pointer
-                        animate-fade-up
-                        ${isSelected
-                          ? "border-2 border-primary bg-[hsl(215_50%_8%)] scale-100"
-                          : "border border-border bg-card hover:border-primary hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(59,130,246,0.08)]"
+                        animate-fade-up cursor-pointer
+                        border transition-all
+                        ${isActive
+                          ? "border-primary bg-[hsl(215_50%_8%)]"
+                          : "border-border bg-card hover:border-primary hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(59,130,246,0.08)]"
                         }
-                        ${isDeselected ? "opacity-50 scale-[0.98]" : ""}
-                        active:scale-[0.98]
                       `}
                       style={{
                         animationDelay: `${80 + i * 80}ms`,
                         minHeight: 380,
+                        transform: isActive ? "scale(0.97)" : undefined,
+                        transition: "transform 120ms ease-out, border-color 120ms ease-out, background-color 120ms ease-out, box-shadow 120ms ease-out",
+                        boxShadow: isActive
+                          ? "0 0 0 1px hsl(var(--primary)), 0 0 24px rgba(59,130,246,0.18)"
+                          : undefined,
                       }}
                     >
                       {/* Top row: icon + number */}
@@ -236,45 +242,6 @@ const ChooseDocumentType = () => {
             </div>
           </div>
         </main>
-
-        {/* Bottom confirmation bar */}
-        <div
-          className={`
-            fixed bottom-0 left-0 lg:left-60 right-0 z-40
-            bg-card border-t border-border
-            px-8 py-5 flex items-center justify-between
-            transition-transform duration-300
-            ${selected ? "translate-y-0" : "translate-y-full"}
-          `}
-          style={{
-            transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            {selectedDoc && (
-              <>
-                <div className="w-10 h-10 rounded-lg bg-secondary border border-border flex items-center justify-center">
-                  <selectedDoc.icon className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <span className="text-foreground font-medium text-sm">
-                    {selectedDoc.shortName}
-                  </span>
-                  <span className="text-muted-foreground text-sm ml-2">
-                    — {selectedDoc.fullName.charAt(0) + selectedDoc.fullName.slice(1).toLowerCase()}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-          <button
-            onClick={handleContinue}
-            className="h-11 px-6 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors duration-200 flex items-center gap-2"
-          >
-            Continue
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
       </div>
     </div>
   );

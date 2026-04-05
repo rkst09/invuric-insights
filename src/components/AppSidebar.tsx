@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   FolderPlus,
   Clock,
-  Settings,
   Menu,
   X,
 } from "lucide-react";
@@ -13,7 +12,6 @@ const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/" },
   { label: "New Project", icon: FolderPlus, path: "/document-generation" },
   { label: "History", icon: Clock, path: "/history" },
-  { label: "Settings", icon: Settings, path: "/settings" },
 ];
 
 const AppSidebar = ({ activeItem = "Dashboard" }: { activeItem?: string }) => {
@@ -66,7 +64,7 @@ const AppSidebar = ({ activeItem = "Dashboard" }: { activeItem?: string }) => {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-3 space-y-1">
           {navItems.map((item) => (
             <button
               key={item.label}
@@ -86,20 +84,6 @@ const AppSidebar = ({ activeItem = "Dashboard" }: { activeItem?: string }) => {
           ))}
         </nav>
 
-        {/* User */}
-        <div className="px-4 py-6 border-t border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-xs font-medium text-foreground">
-              JD
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-foreground truncate">Jane Doe</p>
-              <p className="font-mono-label text-[10px] text-primary tracking-wider">
-                PRO PLAN
-              </p>
-            </div>
-          </div>
-        </div>
       </aside>
     </>
   );
