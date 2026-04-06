@@ -58,12 +58,6 @@ const SECTIONS: Section[] = [
         placeholder: "e.g. Acme Corp is a fintech company focused on payment infrastructure for SMBs…",
       },
       {
-        id: "org_client",
-        label: "Who is the client or stakeholder for this project?",
-        helper: "Name of the client company and the primary contact, if known.",
-        placeholder: "e.g. Client: XYZ Bank, Contact: Sarah Mitchell (Head of Product)…",
-      },
-      {
         id: "org_background",
         label: "What is the background or context behind this project?",
         helper: "Why is this project happening? What triggered it?",
@@ -135,18 +129,6 @@ const SECTIONS: Section[] = [
     title: "Timeline & Schedule",
     short: "Timeline",
     questions: [
-      {
-        id: "timeline_start",
-        label: "When does the project start?",
-        helper: "Planned or expected start date.",
-        placeholder: "e.g. 1st May 2025, or 'Two weeks after contract signing'…",
-      },
-      {
-        id: "timeline_end",
-        label: "When is the expected completion date?",
-        helper: "Final delivery or go-live date.",
-        placeholder: "e.g. 31st July 2025, approximately 12 weeks from start…",
-      },
       {
         id: "timeline_milestones",
         label: "Are there any key milestones or checkpoints?",
@@ -951,10 +933,26 @@ const FRD_SECTIONS: Section[] = [
   },
 ];
 
+const METADATA_SECTION: Section = {
+  id: "metadata",
+  number: "00",
+  title: "Project & Client Details",
+  short: "Details",
+  questions: [
+    { id: "client_name",   label: "Client or company name",              helper: "The organisation this document is being prepared for.",     placeholder: "e.g. Acme Corp" },
+    { id: "project_name",  label: "Project name",                        helper: "A short descriptive name for this engagement.",             placeholder: "e.g. Customer Portal Rebuild" },
+    { id: "project_id",    label: "Project ID / reference number",       helper: "Internal or client reference code (leave blank if none).",  placeholder: "e.g. INV-2025-042" },
+    { id: "author",        label: "Document author (your name)",         helper: "Person producing this document.",                           placeholder: "e.g. James Okafor" },
+    { id: "requestor",     label: "SOW / document requestor",            helper: "Person or team requesting this document.",                  placeholder: "e.g. Sarah Mitchell, VP Engineering" },
+    { id: "start_date",    label: "Estimated project start date",        helper: "Planned or expected start date.",                           placeholder: "e.g. 1 June 2025" },
+    { id: "end_date",      label: "Estimated project end / go-live date",helper: "Target completion or go-live date.",                        placeholder: "e.g. 30 September 2025" },
+  ],
+};
+
 const SECTIONS_MAP: Record<string, Section[]> = {
-  SOW: SECTIONS,
-  PRD: PRD_SECTIONS,
-  FRD: FRD_SECTIONS,
+  SOW: [METADATA_SECTION, ...SECTIONS],
+  PRD: [METADATA_SECTION, ...PRD_SECTIONS],
+  FRD: [METADATA_SECTION, ...FRD_SECTIONS],
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1062,7 +1060,12 @@ const Questionnaire = () => {
   };
 
   const handleGenerate = () => {
-    navigate(generateRoute);
+    sessionStorage.setItem("invuric_answers", JSON.stringify(answers));
+    const sid = searchParams.get("session_id") || "";
+    const dest = sid
+      ? `${generateRoute}&session_id=${sid}`
+      : generateRoute;
+    navigate(dest);
   };
 
   return (

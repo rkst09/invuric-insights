@@ -38,6 +38,13 @@ export const fetchRecentProjects = () =>
 export const getSession = (sessionId: string) =>
   request<Session>(`/api/sessions/${sessionId}`);
 
+export async function createSession(module_type: string): Promise<Session> {
+  return request("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({ module_type }),
+  });
+}
+
 // ── Document Generation (SOW / PRD / FRD) ────────────────────────────────────
 
 export async function generateDocument(params: {
@@ -142,8 +149,17 @@ export const openProjectDetail = (projectId: string) =>
 export const closeProjectDetail = () =>
   console.log("[API] closeProjectDetail");
 
-export const downloadDocument = (projectId: string, docType: string) =>
-  console.log("[API] downloadDocument:", projectId, docType);
+export async function downloadDocument(projectId: string, outputType: string): Promise<void> {
+  const result = await request<{ download_url: string }>(
+    `/api/sessions/${projectId}/outputs/${outputType}/download`
+  );
+  const a = document.createElement("a");
+  a.href = result.download_url;
+  a.download = `${outputType}.docx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 
 export const previewDocument = (projectId: string, docType: string) =>
   console.log("[API] previewDocument:", projectId, docType);

@@ -6,7 +6,7 @@ import {
   Circle, X, ArrowRight,
 } from "lucide-react";
 import {
-  fetchProjects, searchProjects, openProjectDetail, closeProjectDetail,
+  fetchRecentProjects, getSession, Session,
   downloadDocument, previewDocument, exportAllDocuments,
   continueProject, renameProject, duplicateProject, deleteProject,
 } from "@/lib/api";
@@ -18,6 +18,7 @@ interface ProjectDoc {
   name: string;
   format: string;
   size: string;
+  outputType: string;
 }
 
 interface TimelineEntry {
@@ -42,228 +43,67 @@ interface Project {
   timeline: TimelineEntry[];
 }
 
-const PROJECTS: Project[] = [
-  {
-    id: "1", name: "E-Commerce Platform Revamp", pills: ["SOW", "RAID", "WBS"],
-    client: "RetailCo — Full project documentation", status: "Complete",
-    progress: [5, 5], edited: "2 hours ago", created: "Mar 15, 2026", timeSpent: "4h 32m",
-    description: "E-Commerce Platform Revamp covering full scope documentation including SOW, RAID log and Work Breakdown Structure across 3 project phases.",
-    documents: [
-      { name: "Statement of Work", format: "DOCX", size: "84 KB" },
-      { name: "RAID Document", format: "DOCX", size: "42 KB" },
-      { name: "Work Breakdown Structure", format: "XLSX", size: "61 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "complete" },
-      { name: "Work Breakdown Structure", status: "complete" },
-      { name: "Process Flow Diagram", status: "not-started" },
-      { name: "User Stories", status: "not-started" },
-    ],
-    timeline: [
-      { date: "Mar 28", action: "WBS Generated", sub: "Exported to Excel, 3 phases" },
-      { date: "Mar 27", action: "RAID Document Created", sub: "14 risks identified" },
-      { date: "Mar 26", action: "SOW Generated", sub: "Invuric format, DOCX" },
-      { date: "Mar 25", action: "Documents Uploaded", sub: "3 files processed" },
-      { date: "Mar 24", action: "Project Created", sub: "E-Commerce Platform Revamp" },
-    ],
-  },
-  {
-    id: "2", name: "Mobile Banking App", pills: ["PRD", "Stories"],
-    client: "FinTech Ltd — Product requirements", status: "In Progress",
-    progress: [2, 5], edited: "1 day ago", created: "Mar 20, 2026", timeSpent: "2h 15m",
-    description: "Mobile banking application product requirements and user stories covering core banking features, security protocols, and UX flows.",
-    documents: [
-      { name: "Product Requirements Document", format: "DOCX", size: "96 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "not-started" },
-      { name: "Work Breakdown Structure", status: "not-started" },
-      { name: "Process Flow Diagram", status: "in-progress" },
-      { name: "User Stories", status: "not-started" },
-    ],
-    timeline: [
-      { date: "Mar 27", action: "PRD Generated", sub: "96 KB, DOCX format" },
-      { date: "Mar 20", action: "Project Created", sub: "Mobile Banking App" },
-    ],
-  },
-  {
-    id: "3", name: "Healthcare Portal Redesign", pills: ["FRD", "RAID"],
-    client: "MedCare Group — System requirements", status: "Complete",
-    progress: [5, 5], edited: "3 days ago", created: "Mar 10, 2026", timeSpent: "6h 08m",
-    description: "Healthcare portal functional requirements and risk assessment documentation covering patient management, appointment scheduling, and compliance modules.",
-    documents: [
-      { name: "Functional Requirements Document", format: "DOCX", size: "112 KB" },
-      { name: "RAID Document", format: "DOCX", size: "38 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "complete" },
-      { name: "Work Breakdown Structure", status: "complete" },
-      { name: "Process Flow Diagram", status: "complete" },
-      { name: "User Stories", status: "complete" },
-    ],
-    timeline: [
-      { date: "Mar 25", action: "All Modules Completed", sub: "Full documentation set" },
-      { date: "Mar 18", action: "RAID Document Created", sub: "9 risks, 4 assumptions" },
-      { date: "Mar 10", action: "Project Created", sub: "Healthcare Portal Redesign" },
-    ],
-  },
-  {
-    id: "4", name: "Payment Gateway Integration", pills: ["SOW", "FRD"],
-    client: "PayFlow Inc — Technical SOW", status: "Draft",
-    progress: [1, 5], edited: "5 days ago", created: "Mar 8, 2026", timeSpent: "1h 10m",
-    description: "Payment gateway integration technical scope and functional requirements for multi-provider payment processing system.",
-    documents: [
-      { name: "Statement of Work", format: "DOCX", size: "54 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "not-started" },
-      { name: "Work Breakdown Structure", status: "not-started" },
-      { name: "Process Flow Diagram", status: "not-started" },
-      { name: "User Stories", status: "not-started" },
-    ],
-    timeline: [
-      { date: "Mar 23", action: "SOW Draft Saved", sub: "54 KB, incomplete" },
-      { date: "Mar 8", action: "Project Created", sub: "Payment Gateway Integration" },
-    ],
-  },
-  {
-    id: "5", name: "CRM System Migration", pills: ["PRD", "WBS", "Stories"],
-    client: "SalesForce Project — Internal", status: "Complete",
-    progress: [5, 5], edited: "1 week ago", created: "Feb 28, 2026", timeSpent: "8h 45m",
-    description: "CRM system migration covering product requirements, work breakdown structure and user stories for data migration and feature parity.",
-    documents: [
-      { name: "Product Requirements Document", format: "DOCX", size: "88 KB" },
-      { name: "Work Breakdown Structure", format: "XLSX", size: "72 KB" },
-      { name: "User Stories", format: "DOCX", size: "64 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "complete" },
-      { name: "Work Breakdown Structure", status: "complete" },
-      { name: "Process Flow Diagram", status: "complete" },
-      { name: "User Stories", status: "complete" },
-    ],
-    timeline: [
-      { date: "Mar 18", action: "User Stories Generated", sub: "24 stories, 3 epics" },
-      { date: "Mar 14", action: "WBS Created", sub: "4 phases, 32 tasks" },
-      { date: "Mar 5", action: "PRD Generated", sub: "88 KB, DOCX format" },
-      { date: "Feb 28", action: "Project Created", sub: "CRM System Migration" },
-    ],
-  },
-  {
-    id: "6", name: "Logistics Dashboard", pills: ["SOW", "PRD"],
-    client: "ShipFast — Dashboard requirements", status: "In Progress",
-    progress: [3, 5], edited: "1 week ago", created: "Feb 25, 2026", timeSpent: "3h 20m",
-    description: "Logistics dashboard scope and product requirements for real-time shipment tracking, route optimization, and fleet management.",
-    documents: [
-      { name: "Statement of Work", format: "DOCX", size: "76 KB" },
-      { name: "Product Requirements Document", format: "DOCX", size: "92 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "complete" },
-      { name: "Work Breakdown Structure", status: "in-progress" },
-      { name: "Process Flow Diagram", status: "not-started" },
-      { name: "User Stories", status: "not-started" },
-    ],
-    timeline: [
-      { date: "Mar 20", action: "PRD Generated", sub: "92 KB, DOCX format" },
-      { date: "Mar 12", action: "SOW Generated", sub: "76 KB, DOCX format" },
-      { date: "Feb 25", action: "Project Created", sub: "Logistics Dashboard" },
-    ],
-  },
-  {
-    id: "7", name: "HR Management System", pills: ["FRD", "Stories"],
-    client: "PeopleFirst — HR module specs", status: "Complete",
-    progress: [5, 5], edited: "2 weeks ago", created: "Feb 18, 2026", timeSpent: "5h 50m",
-    description: "HR management system functional requirements and user stories for employee onboarding, payroll, and performance management modules.",
-    documents: [
-      { name: "Functional Requirements Document", format: "DOCX", size: "104 KB" },
-      { name: "User Stories", format: "DOCX", size: "58 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "complete" },
-      { name: "Work Breakdown Structure", status: "complete" },
-      { name: "Process Flow Diagram", status: "complete" },
-      { name: "User Stories", status: "complete" },
-    ],
-    timeline: [
-      { date: "Mar 8", action: "User Stories Generated", sub: "18 stories, 2 epics" },
-      { date: "Mar 2", action: "FRD Generated", sub: "104 KB, DOCX format" },
-      { date: "Feb 18", action: "Project Created", sub: "HR Management System" },
-    ],
-  },
-  {
-    id: "8", name: "Inventory Management Tool", pills: ["SOW", "RAID", "WBS"],
-    client: "StockMaster — Warehouse tool", status: "Draft",
-    progress: [2, 5], edited: "2 weeks ago", created: "Feb 15, 2026", timeSpent: "1h 45m",
-    description: "Inventory management tool covering scope, risk assessment, and work breakdown for warehouse automation and stock tracking system.",
-    documents: [
-      { name: "Statement of Work", format: "DOCX", size: "68 KB" },
-      { name: "RAID Document", format: "DOCX", size: "32 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "complete" },
-      { name: "Work Breakdown Structure", status: "not-started" },
-      { name: "Process Flow Diagram", status: "not-started" },
-      { name: "User Stories", status: "not-started" },
-    ],
-    timeline: [
-      { date: "Mar 5", action: "RAID Document Created", sub: "8 risks identified" },
-      { date: "Feb 28", action: "SOW Draft Saved", sub: "68 KB, incomplete" },
-      { date: "Feb 15", action: "Project Created", sub: "Inventory Management Tool" },
-    ],
-  },
-  {
-    id: "9", name: "Customer Support Platform", pills: ["PRD", "FRD"],
-    client: "HelpDesk Pro — Support system", status: "Complete",
-    progress: [5, 5], edited: "3 weeks ago", created: "Feb 10, 2026", timeSpent: "7h 12m",
-    description: "Customer support platform product and functional requirements for ticket management, knowledge base, and live chat integration.",
-    documents: [
-      { name: "Product Requirements Document", format: "DOCX", size: "90 KB" },
-      { name: "Functional Requirements Document", format: "DOCX", size: "118 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "complete" },
-      { name: "Work Breakdown Structure", status: "complete" },
-      { name: "Process Flow Diagram", status: "complete" },
-      { name: "User Stories", status: "complete" },
-    ],
-    timeline: [
-      { date: "Mar 1", action: "All Modules Completed", sub: "Full documentation set" },
-      { date: "Feb 22", action: "FRD Generated", sub: "118 KB, DOCX format" },
-      { date: "Feb 14", action: "PRD Generated", sub: "90 KB, DOCX format" },
-      { date: "Feb 10", action: "Project Created", sub: "Customer Support Platform" },
-    ],
-  },
-  {
-    id: "10", name: "Supply Chain Analytics", pills: ["SOW", "Stories"],
-    client: "ChainIQ — Analytics platform", status: "In Progress",
-    progress: [1, 5], edited: "1 month ago", created: "Feb 1, 2026", timeSpent: "0h 55m",
-    description: "Supply chain analytics platform scope and user stories for predictive analytics, demand forecasting, and supplier performance dashboards.",
-    documents: [
-      { name: "Statement of Work", format: "DOCX", size: "62 KB" },
-    ],
-    modules: [
-      { name: "Document Generation", status: "complete" },
-      { name: "RAID Document", status: "not-started" },
-      { name: "Work Breakdown Structure", status: "not-started" },
-      { name: "Process Flow Diagram", status: "not-started" },
-      { name: "User Stories", status: "not-started" },
-    ],
-    timeline: [
-      { date: "Feb 5", action: "SOW Generated", sub: "62 KB, DOCX format" },
-      { date: "Feb 1", action: "Project Created", sub: "Supply Chain Analytics" },
-    ],
-  },
-];
+const MODULE_TO_PILL: Record<string, DocType> = {
+  sow: "SOW", prd: "PRD", frd: "FRD",
+  raid: "RAID", wbs: "WBS", backlog: "Stories", pfd: "SOW",
+};
+
+const STATUS_MAP: Record<string, Status> = {
+  completed: "Complete", generating: "In Progress",
+  created: "Draft", failed: "Draft", uploaded: "Draft",
+};
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function sessionToProject(s: Session & { documents?: any[]; outputs?: any[] }): Project {
+  const docType = MODULE_TO_PILL[s.module_type] ?? "SOW";
+  const status  = STATUS_MAP[s.status] ?? "Draft";
+  const name    = (s.metadata?.project_name as string)
+                || (s.metadata?.filename as string)
+                || `Session ${s.id.slice(0, 8)}`;
+  const client  = (s.metadata?.client_name as string) || "—";
+
+  const docs: ProjectDoc[] = (s.outputs ?? []).map((o: any) => ({
+    name: o.output_type?.replace(/_/g, " ").toUpperCase() ?? "Document",
+    format: o.output_type?.includes("pdf") ? "PDF" : "DOCX",
+    size: "—",
+    outputType: o.output_type ?? "",
+  }));
+
+  const timeline: TimelineEntry[] = [
+    { date: timeAgo(s.created_at), action: `${docType} Created`, sub: name },
+    ...(s.outputs ?? []).map((o: any) => ({
+      date: timeAgo(s.created_at),
+      action: `${o.output_type?.replace(/_/g, " ").toUpperCase()} Generated`,
+      sub: "Invuric format",
+    })),
+  ];
+
+  return {
+    id: s.id,
+    name,
+    pills: [docType],
+    client,
+    status,
+    progress: [status === "Complete" ? 5 : status === "In Progress" ? 2 : 1, 5] as [number, number],
+    edited: timeAgo(s.created_at),
+    created: new Date(s.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+    timeSpent: "—",
+    description: `${docType} document generated for ${client} via Invuric BA Agent.`,
+    documents: docs,
+    modules: [],
+    timeline,
+  };
+}
 
 const FILTERS = ["All", "SOW", "PRD", "FRD", "RAID", "WBS", "Stories"] as const;
 
@@ -294,45 +134,47 @@ const progressFill: Record<Status, string> = {
   "Draft": "bg-[hsl(0_0%_33%)]",
 };
 
-const stats = [
-  { icon: FolderOpen, value: "14", label: "Total Projects" },
-  { icon: FileText, value: "47", label: "Documents Generated" },
-  { icon: Clock, value: "2.4 hrs", label: "Avg. Completion Time" },
-  { icon: TrendingUp, value: "92%", label: "Completion Rate" },
-];
-
 const PreviousProjects = () => {
   const [activeFilter, setActiveFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [projects, setProjects]   = useState<Project[]>([]);
+  const [loading, setLoading]     = useState(true);
 
-  const filtered = PROJECTS.filter((p) => {
+  useEffect(() => {
+    fetchRecentProjects()
+      .then((sessions) => setProjects(sessions.map(sessionToProject)))
+      .catch(() => setProjects([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = projects.filter((p) => {
     const matchesFilter = activeFilter === "All" || p.pills.includes(activeFilter as DocType);
     const matchesSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.client.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
+  const stats = [
+    { icon: FolderOpen, value: String(projects.length), label: "Total Projects" },
+    { icon: FileText, value: String(projects.filter(p => p.status === "Complete").length), label: "Documents Generated" },
+    { icon: Clock, value: "—", label: "Avg. Completion Time" },
+    { icon: TrendingUp, value: projects.length ? `${Math.round(projects.filter(p => p.status === "Complete").length / projects.length * 100)}%` : "—", label: "Completion Rate" },
+  ];
+
   const handleOpenProject = (project: Project) => {
-    openProjectDetail(project.id);
     setSelectedProject(project);
     setIsPanelOpen(true);
+    getSession(project.id)
+      .then((full) => setSelectedProject(sessionToProject(full as any)))
+      .catch(() => {});
   };
 
   const handleClosePanel = useCallback(() => {
-    closeProjectDetail();
     setIsPanelOpen(false);
     setTimeout(() => setSelectedProject(null), 320);
   }, []);
-
-  useEffect(() => {
-    fetchProjects(activeFilter);
-  }, [activeFilter]);
-
-  useEffect(() => {
-    if (searchQuery) searchProjects(searchQuery);
-  }, [searchQuery]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -375,7 +217,7 @@ const PreviousProjects = () => {
                     {FILTERS.map((f) => (
                       <button
                         key={f}
-                        onClick={() => { setActiveFilter(f); fetchProjects(f); }}
+                        onClick={() => setActiveFilter(f)}
                         className={`font-mono-label text-[11px] px-3 py-1.5 rounded-[20px] border transition-all duration-150 cursor-pointer ${
                           activeFilter === f
                             ? "bg-primary border-primary text-primary-foreground"
@@ -410,7 +252,13 @@ const PreviousProjects = () => {
 
               {/* Project List */}
               <div className="mt-8 space-y-2.5">
-                {filtered.map((project, i) => (
+                {loading ? (
+                  <div className="py-16 text-center text-sm text-muted-foreground">Loading projects…</div>
+                ) : filtered.length === 0 ? (
+                  <div className="py-16 text-center text-sm text-muted-foreground">
+                    {searchQuery || activeFilter !== "All" ? "No projects match your filter." : "No projects yet. Generate your first document from the dashboard."}
+                  </div>
+                ) : filtered.map((project, i) => (
                   <div
                     key={project.id}
                     onClick={() => handleOpenProject(project)}
@@ -503,6 +351,7 @@ const PreviousProjects = () => {
           </div>
         </main>
 
+
         {/* PDP Overlay */}
         {(isPanelOpen || selectedProject) && (
           <div
@@ -578,7 +427,7 @@ const PreviousProjects = () => {
                       <div className="flex items-center gap-4">
                         <span className="font-mono-label text-[11px] text-[hsl(0_0%_27%)]">{doc.size}</span>
                         <button
-                          onClick={() => downloadDocument(selectedProject.id, doc.name)}
+                          onClick={() => downloadDocument(selectedProject.id, doc.outputType)}
                           className="text-primary hover:scale-110 transition-transform duration-150"
                         >
                           <Download className="w-4 h-4" />

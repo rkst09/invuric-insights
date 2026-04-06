@@ -3,66 +3,188 @@ from config import settings
 
 client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-SYSTEM_PROMPTS = {
-    "sow": """You are an expert Business Analyst. Generate a complete, professional Statement of Work (SOW) document.
-Structure it with these sections:
-1. Executive Summary
-2. Project Overview & Background
-3. Scope of Work
-4. Deliverables
-5. Timeline & Milestones
-6. Assumptions & Constraints
-7. Acceptance Criteria
-8. Pricing & Payment Terms
-9. Change Management Process
-10. Sign-off
+# Metadata keys the questionnaire collects — pulled into the metadata block verbatim
+METADATA_KEYS = ["client_name", "project_id", "project_name", "author", "requestor", "start_date", "end_date"]
 
-Use the provided document context and questionnaire answers. Be specific, professional, and thorough.
-Return the document as structured JSON with keys matching section names.""",
+SOW_PROMPT = """You are an expert Business Analyst at Invuric. Generate a complete, professional Statement of Work (SOW).
 
-    "prd": """You are an expert Product Manager. Generate a complete Product Requirements Document (PRD).
-Structure it with these sections:
-1. Product Overview
-2. Goals & Success Metrics
-3. User Personas
-4. Feature Requirements (functional)
-5. Non-Functional Requirements
-6. User Flows
-7. Technical Constraints
-8. Out of Scope
-9. Timeline
-10. Open Questions
-
-Use the provided context and answers. Return as structured JSON with section keys.""",
-
-    "frd": """You are an expert Business Analyst. Generate a complete Functional Requirements Document (FRD).
-Structure it with these sections:
-1. Introduction & Purpose
-2. System Overview
-3. Functional Requirements (numbered FR-001, FR-002...)
-4. Business Rules
-5. Data Requirements
-6. Integration Requirements
-7. Security Requirements
-8. Reporting Requirements
-9. Assumptions
-10. Glossary
-
-Each functional requirement must have: ID, Title, Description, Priority (High/Medium/Low), Acceptance Criteria.
-Return as structured JSON with section keys.""",
+Return ONLY valid JSON matching this exact schema (no extra keys, no markdown):
+{
+  "metadata": {
+    "client_name": string,
+    "project_id": string,
+    "project_name": string,
+    "author": string,
+    "requestor": string,
+    "start_date": string,
+    "end_date": string
+  },
+  "executive_summary": string,
+  "project_overview": string,
+  "scope_of_work": {
+    "in_scope": [string, ...],
+    "out_of_scope": [string, ...]
+  },
+  "deliverables": [
+    {"id": "D-001", "name": string, "description": string},
+    ...
+  ],
+  "risks": [
+    {"id": "R-001", "description": string},
+    ...
+  ],
+  "assumptions": [
+    {"id": "A-001", "description": string},
+    ...
+  ],
+  "dependencies": [
+    {"id": "DEP-001", "description": string},
+    ...
+  ],
+  "responsibilities": {
+    "Client": [string, ...],
+    "Invuric": [string, ...]
+  },
+  "timeline": {
+    "phases": [
+      {"phase": string, "weeks": "1-2", "deliverables": string},
+      ...
+    ]
+  },
+  "roles": [
+    {"role": string, "description": string, "location": string, "hours": string},
+    ...
+  ],
+  "change_management": string,
+  "acceptance_criteria": [string, ...],
+  "validity": string
 }
+
+Rules:
+- Populate metadata from the questionnaire answers provided.
+- Be specific, thorough, and professional. Minimum 3-5 items per list.
+- Timeline phases must cover the full project. Use realistic week ranges (e.g. "1-2", "3-5").
+- Do not include cost, rate, or monetary values — leave those fields as empty strings.
+- Roles: include realistic BA project roles (BA, PM, Tech Lead, Developer, QA) with hours estimates.
+"""
+
+PRD_PROMPT = """You are an expert Product Manager at Invuric. Generate a complete Product Requirements Document (PRD).
+
+Return ONLY valid JSON matching this exact schema (no extra keys, no markdown):
+{
+  "metadata": {
+    "client_name": string,
+    "project_id": string,
+    "project_name": string,
+    "author": string,
+    "requestor": string,
+    "start_date": string,
+    "end_date": string
+  },
+  "product_overview": string,
+  "goals": [
+    {"goal": string, "metric": string},
+    ...
+  ],
+  "user_personas": [
+    {"name": string, "role": string, "needs": string, "pain_points": string},
+    ...
+  ],
+  "feature_requirements": [
+    {"id": "F-001", "feature": string, "description": string, "priority": "High|Medium|Low", "user_story": string},
+    ...
+  ],
+  "non_functional_requirements": [
+    {"category": string, "requirement": string},
+    ...
+  ],
+  "user_flows": string,
+  "technical_constraints": [string, ...],
+  "out_of_scope": [string, ...],
+  "timeline": string,
+  "open_questions": [string, ...]
+}
+
+Rules:
+- Populate metadata from the questionnaire answers provided.
+- Be specific and thorough. Minimum 3-5 items per list.
+- Feature requirements: minimum 5 features with clear user stories.
+- Non-functional requirements: cover performance, security, scalability, accessibility.
+"""
+
+FRD_PROMPT = """You are an expert Business Analyst at Invuric. Generate a complete Functional Requirements Document (FRD).
+
+Return ONLY valid JSON matching this exact schema (no extra keys, no markdown):
+{
+  "metadata": {
+    "client_name": string,
+    "project_id": string,
+    "project_name": string,
+    "author": string,
+    "requestor": string,
+    "start_date": string,
+    "end_date": string
+  },
+  "introduction": string,
+  "system_overview": string,
+  "functional_requirements": [
+    {
+      "id": "FR-001",
+      "title": string,
+      "description": string,
+      "priority": "High|Medium|Low",
+      "acceptance_criteria": string
+    },
+    ...
+  ],
+  "business_rules": [string, ...],
+  "data_requirements": string,
+  "integration_requirements": [
+    {"system": string, "type": string, "description": string},
+    ...
+  ],
+  "security_requirements": [string, ...],
+  "reporting_requirements": [string, ...],
+  "assumptions": [string, ...],
+  "glossary": {
+    "term": "definition",
+    ...
+  }
+}
+
+Rules:
+- Populate metadata from the questionnaire answers provided.
+- Functional requirements: minimum 8 requirements, numbered FR-001 through FR-00N.
+- Each FR must have a clear, testable acceptance criterion.
+- Business rules: minimum 4 rules.
+- Be specific and thorough throughout.
+"""
+
+SYSTEM_PROMPTS = {"sow": SOW_PROMPT, "prd": PRD_PROMPT, "frd": FRD_PROMPT}
 
 
 async def run_doc_pipeline(doc_type: str, raw_text: str, answers: dict) -> dict:
     system_prompt = SYSTEM_PROMPTS[doc_type]
 
-    user_content = f"""## Uploaded Document Context:
-{raw_text[:8000] if raw_text else "No document uploaded — generate from scratch using the answers below."}
+    # Extract metadata from answers
+    metadata_lines = "\n".join(
+        f"  {k}: {answers.get(k, '')}" for k in METADATA_KEYS
+    )
+
+    # Remaining answers (non-metadata)
+    other_answers = {k: v for k, v in answers.items() if k not in METADATA_KEYS}
+    answers_lines = "\n".join(f"  - {k}: {v}" for k, v in other_answers.items())
+
+    user_content = f"""## Metadata Fields (include these verbatim in the metadata block):
+{metadata_lines}
 
 ## Questionnaire Answers:
-{_format_answers(answers)}
+{answers_lines if answers_lines else "  (none provided)"}
 
-Generate the full {doc_type.upper()} document now. Return valid JSON only."""
+## Uploaded Document Context:
+{raw_text[:8000] if raw_text else "No document uploaded — generate from scratch using the information above."}
+
+Generate the full {doc_type.upper()} now. Return valid JSON only, no markdown fences."""
 
     response = await client.chat.completions.create(
         model="gpt-4o",
@@ -76,7 +198,3 @@ Generate the full {doc_type.upper()} document now. Return valid JSON only."""
 
     import json
     return json.loads(response.choices[0].message.content)
-
-
-def _format_answers(answers: dict) -> str:
-    return "\n".join(f"- {k}: {v}" for k, v in answers.items())

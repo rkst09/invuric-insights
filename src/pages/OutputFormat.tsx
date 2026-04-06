@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import AppSidebar from "@/components/AppSidebar";
+import { generateDocument, createSession } from "@/lib/api";
 import {
   ArrowLeft,
   ArrowRight,
@@ -33,6 +34,8 @@ const OutputFormat = () => {
   const [exportFormat, setExportFormat] = useState<FileExport>("docx");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -62,11 +65,36 @@ const OutputFormat = () => {
 
   const canGenerate = selected === "INVURIC" || (selected === "CLIENT" && uploadedFile);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!canGenerate || isGenerating) return;
     setIsGenerating(true);
-    setTimeout(() => setIsExiting(true), 100);
-    setTimeout(() => navigate(`/generating?type=${docType}&format=${selected}&export=${exportFormat}`), 280);
+    setGenerateError(null);
+
+    try {
+      const answers: Record<string, string> = JSON.parse(
+        sessionStorage.getItem("invuric_answers") || "{}"
+      );
+
+      let sid = searchParams.get("session_id") || "";
+      if (!sid) {
+        const session = await createSession(docType.toLowerCase());
+        sid = session.id;
+      }
+
+      const result = await generateDocument({
+        doc_type: docType.toLowerCase() as "sow" | "prd" | "frd",
+        session_id: sid,
+        answers,
+        export_format: exportFormat,
+        template: "invuric",
+      });
+
+      setDownloadUrl(result.download_url);
+      setIsGenerating(false);
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : "Generation failed. Please try again.");
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -375,6 +403,43 @@ const OutputFormat = () => {
                 </div>
               </div>
 
+              {/* Success panel */}
+              {downloadUrl && (
+                <div className="max-w-[900px] mx-auto mt-6 px-6 py-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 animate-fade-up">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-emerald-400 font-semibold text-sm">Document ready!</p>
+                      <p className="text-muted-foreground text-xs mt-1">Your {docType} has been generated. Click to download.</p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <a
+                        href={downloadUrl}
+                        download
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        Download {docType}
+                      </a>
+                      <button
+                        onClick={() => navigate("/")}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Back to Dashboard
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Error banner */}
+              {generateError && (
+                <div className="max-w-[900px] mx-auto mt-4 px-4 py-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-sm animate-fade-up">
+                  {generateError}
+                </div>
+              )}
+
               {/* Bottom CTA */}
               <div className="max-w-[900px] mx-auto mt-8 pb-16 flex items-center gap-4 animate-fade-up" style={{ animationDelay: "160ms" }}>
                 <button
@@ -390,8 +455,8 @@ const OutputFormat = () => {
                   `}
                 >
                   <Zap className="w-4 h-4" />
-                  Generate {docType}
-                  <ArrowRight className="w-4 h-4" />
+                  {isGenerating ? "Generating…" : `Generate ${docType}`}
+                  {!isGenerating && <ArrowRight className="w-4 h-4" />}
                 </button>
 
                 {selected === "CLIENT" && !uploadedFile && (

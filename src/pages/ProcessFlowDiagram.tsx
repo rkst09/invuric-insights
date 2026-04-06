@@ -347,29 +347,76 @@ const ProcessFlowDiagram = () => {
     const svg = diagramRef.current.querySelector("svg");
     if (!svg) return;
 
+    const triggerDownload = (url: string, filename: string) => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
     if (fmt === "svg") {
       const blob = new Blob([svg.outerHTML], { type: "image/svg+xml" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "diagram.svg"; a.click();
-      URL.revokeObjectURL(url);
-    } else {
-      const canvas = document.createElement("canvas");
-      const svgData = new XMLSerializer().serializeToString(svg);
-      const img = new Image();
-      img.onload = () => {
-        canvas.width = img.width; canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) { ctx.drawImage(img, 0, 0); canvas.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url; a.download = `diagram.${fmt}`; a.click();
-          URL.revokeObjectURL(url);
-        }, "image/png"); }
-      };
-      img.src = `data:image/svg+xml;base64,${btoa(svgData)}`;
+      triggerDownload(URL.createObjectURL(blob), "diagram.svg");
+      setExportToast(true);
+      setTimeout(() => setExportToast(false), 2500);
+      return;
     }
+
+    if (fmt === "pdf") {
+      // Open print dialog for PDF — no external lib required
+      const printWin = window.open("", "_blank");
+      if (printWin) {
+        printWin.document.write(
+          `<html><body style="margin:0;background:#fff">${svg.outerHTML}</body></html>`
+        );
+        printWin.document.close();
+        printWin.focus();
+        printWin.print();
+        printWin.close();
+      }
+      setExportToast(true);
+      setTimeout(() => setExportToast(false), 2500);
+      return;
+    }
+
+    // PNG — use Blob URL to avoid btoa Unicode issues; set explicit dimensions
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    const rect  = svg.getBoundingClientRect();
+    const W = Math.max(rect.width,  svg.viewBox.baseVal.width,  1200);
+    const H = Math.max(rect.height, svg.viewBox.baseVal.height,  800);
+    clone.setAttribute("width",  String(W));
+    clone.setAttribute("height", String(H));
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+
+    const svgBlob = new Blob([new XMLSerializer().serializeToString(clone)], {
+      type: "image/svg+xml;charset=utf-8",
+    });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    const canvas = document.createElement("canvas");
+    const scale  = 2; // retina quality
+    canvas.width  = W * scale;
+    canvas.height = H * scale;
+
+    const img = new Image();
+    img.onload = () => {
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.scale(scale, scale);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(img, 0, 0, W, H);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        triggerDownload(URL.createObjectURL(blob), "diagram.png");
+      }, "image/png");
+      URL.revokeObjectURL(svgUrl);
+    };
+    img.onerror = () => URL.revokeObjectURL(svgUrl);
+    img.src = svgUrl;
 
     setExportToast(true);
     setTimeout(() => setExportToast(false), 2500);

@@ -77,7 +77,7 @@ const UserStories = () => {
 
     try {
       const uploadRes = await uploadFile(docFiles[0].file);
-      const project_name = docFiles[0].name.rsplit?.(".", 1)?.[0] || "Project";
+      const project_name = docFiles[0].name.replace(/\.[^.]+$/, "") || "Project";
       const backlogRes = await generateBacklog({
         session_id: uploadRes.session_id,
         project_name: docFiles[0].name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " "),
