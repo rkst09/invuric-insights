@@ -1,31 +1,27 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
-from pipelines.pfd_pipeline import run_pfd_pipeline
-from database import get_supabase
+from pydantic import BaseModel, Field
+from typing import Literal
+
+from generation_jobs import queue_and_dispatch
 
 router = APIRouter()
 
 
 class GenerateRequest(BaseModel):
-    session_id: str
-    flow_type: str = "end-to-end"
-    style: str = "flowchart"
+    session_id: str = Field(..., min_length=1)
+    flow_type: str = Field(default="end-to-end", min_length=1, max_length=80)
+    style: Literal["flowchart", "swimlane", "sequence"] = "flowchart"
 
 
 @router.post("")
 async def generate_pfd(req: GenerateRequest):
-    db = get_supabase()
-    extracted = db.table("extracted_data").select("raw_text").eq("session_id", req.session_id).execute()
-    raw_text = extracted.data[0]["raw_text"] if extracted.data else ""
-
-    db.table("sessions").update({"status": "generating", "module_type": "pfd"}).eq("id", req.session_id).execute()
-    mermaid_code = await run_pfd_pipeline(raw_text, req.flow_type, req.style)
-
-    db.table("outputs").insert({
-        "session_id": req.session_id,
-        "output_type": "pfd_mermaid",
-        "mermaid_code": mermaid_code,
-    }).execute()
-    db.table("sessions").update({"status": "completed"}).eq("id", req.session_id).execute()
-
-    return {"mermaid_code": mermaid_code, "session_id": req.session_id}
+    return queue_and_dispatch(
+        req.session_id,
+        "pfd",
+        {
+            "session_id": req.session_id,
+            "flow_type": req.flow_type,
+            "style": req.style,
+        },
+        "Diagram generation queued.",
+    )
