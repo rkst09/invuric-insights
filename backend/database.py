@@ -157,8 +157,20 @@ def get_latest_output_record(session_id: str, output_type: str) -> dict | None:
 
 def create_output_signed_url(storage_path: str, expires_in_seconds: int = 3600) -> str:
     db = get_supabase()
-    url = db.storage.from_("outputs").create_signed_url(storage_path, expires_in_seconds)
-    return url["signedURL"]
+    result = db.storage.from_("outputs").create_signed_url(storage_path, expires_in_seconds)
+    # Handle different storage3 version return formats:
+    # storage3 <0.7 returns {"signedURL": "..."}
+    # storage3 >=0.7 returns {"signedUrl": "..."} or an object with .signed_url
+    if isinstance(result, dict):
+        for key in ("signedURL", "signedUrl", "signed_url"):
+            val = result.get(key)
+            if val:
+                return val
+    for attr in ("signed_url", "signedURL", "signedUrl"):
+        val = getattr(result, attr, None)
+        if val:
+            return val
+    raise StorageServiceError("Could not generate a download link for this file.")
 
 
 def get_document_extracted_text(document_id: str) -> str:

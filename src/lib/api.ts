@@ -379,6 +379,10 @@ export async function downloadDocument(
   const a = document.createElement("a");
   a.href = downloadUrl;
   a.download = `${resolved.output_type}.${getOutputExtension(resolved.output_type)}`;
+  // Supabase signed URLs are cross-origin — the `download` attr is ignored by
+  // browsers for cross-origin URLs unless target="_blank" is set.
+  a.target = "_blank";
+  a.rel = "noreferrer noopener";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

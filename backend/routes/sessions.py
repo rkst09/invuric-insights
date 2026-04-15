@@ -8,6 +8,7 @@ from database import (
     get_supabase,
     merge_session_metadata,
 )
+from errors import StorageServiceError
 
 router = APIRouter()
 
@@ -104,8 +105,11 @@ def download_output(session_id: str, output_type: str):
     row = result.data[0] if result.data else None
     if not row:
         raise HTTPException(404, "Output not found")
-    url = db.storage.from_("outputs").create_signed_url(row["storage_path"], 3600)
-    return {"download_url": url["signedURL"]}
+    try:
+        download_url = create_output_signed_url(row["storage_path"])
+    except StorageServiceError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return {"download_url": download_url}
 
 
 @router.delete("/{session_id}")

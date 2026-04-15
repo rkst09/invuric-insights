@@ -149,6 +149,8 @@ const PreviousProjects = () => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [projects, setProjects]   = useState<Project[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRecentProjects()
@@ -169,6 +171,19 @@ const PreviousProjects = () => {
     { icon: Clock, value: "—", label: "Avg. Completion Time" },
     { icon: TrendingUp, value: projects.length ? `${Math.round(projects.filter(p => p.status === "Complete").length / projects.length * 100)}%` : "—", label: "Completion Rate" },
   ];
+
+  const handleDownload = async (projectId: string, outputType: string) => {
+    const key = `${projectId}:${outputType}`;
+    setDownloadingId(key);
+    setDownloadError(null);
+    try {
+      await downloadDocument(projectId, outputType);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Download failed. Please try again.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const handleOpenProject = (project: Project) => {
     setSelectedProject(project);
@@ -426,16 +441,27 @@ const PreviousProjects = () => {
                 <span className="text-base font-medium text-foreground">{selectedProject.name}</span>
                 {selectedProject.documents.length > 0 ? (
                   <button
-                    onClick={() => void downloadDocument(selectedProject.id, selectedProject.documents[0].outputType)}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground border border-border px-3.5 py-1.5 rounded-lg hover:border-primary hover:text-primary transition-all duration-200"
+                    disabled={!!downloadingId}
+                    onClick={() => handleDownload(selectedProject.id, selectedProject.documents[0].outputType)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground border border-border px-3.5 py-1.5 rounded-lg hover:border-primary hover:text-primary transition-all duration-200 disabled:opacity-50"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Download
+                    {downloadingId ? "..." : "Download"}
                   </button>
                 ) : (
                   <div className="w-[90px]" />
                 )}
               </div>
+
+              {/* Download error banner */}
+              {downloadError && (
+                <div className="mx-7 mt-4 px-4 py-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs flex items-center justify-between gap-3">
+                  <span>{downloadError}</span>
+                  <button onClick={() => setDownloadError(null)} className="shrink-0 text-rose-400/60 hover:text-rose-400">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* Block 1 — Overview */}
               <div className="px-7 pt-7">
@@ -481,14 +507,17 @@ const PreviousProjects = () => {
                       <div className="flex items-center gap-4">
                         <span className="font-mono-label text-[11px] text-[hsl(0_0%_27%)]">{doc.size}</span>
                         <button
-                          onClick={() => void downloadDocument(selectedProject.id, doc.outputType)}
-                          className="text-primary hover:scale-110 transition-transform duration-150"
+                          disabled={downloadingId === `${selectedProject.id}:${doc.outputType}`}
+                          onClick={() => handleDownload(selectedProject.id, doc.outputType)}
+                          className="text-primary hover:scale-110 transition-transform duration-150 disabled:opacity-50"
+                          title="Download"
                         >
                           <Download className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => void previewDocument(selectedProject.id, doc.outputType)}
                           className="text-muted-foreground hover:text-foreground transition-colors duration-150"
+                          title="Preview"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
