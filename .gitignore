@@ -32,3 +32,6 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+backend/tests/.tmp/
+.omc/
+backend/.omc/
