@@ -1,38 +1,45 @@
-from openai import AsyncOpenAI
-from config import settings
-import json
+from llm import complete_json
+from structured_outputs import RaidDocumentModel
 
-client = AsyncOpenAI(api_key=settings.openai_api_key)
+SYSTEM_PROMPT = """You are a Senior Risk Manager and Programme Assurance consultant with 15+ years managing risk registers for enterprise programmes across banking, government, healthcare, and technology. You have chaired risk review boards and presented RAID registers to boards of directors.
 
-SYSTEM_PROMPT = """You are an expert Business Analyst specializing in risk management.
-Analyze the provided document and extract a comprehensive RAID register.
+The RAID register you produce will be used in weekly programme steering committee meetings and reviewed by the client's PMO office. Every item must be specific, actionable, owned, and reflect genuine risks inherent to THIS project - not generic project management platitudes.
 
-Return a JSON object with exactly these keys:
+Quality standard:
+- Risks must name specific failure modes for this project domain
+- Mitigation strategies must be concrete actions with named owners
+- Contingency plans must differ from mitigations
+- Assumptions must have specific, measurable impact-if-wrong statements
+- Issues must have concrete resolution steps with target dates
+- Dependencies must name specific external systems, teams, approval bodies, or vendors
+
+Return a JSON object with exactly these keys (no extra keys, no markdown):
 {
-  "risks": [{"id": "R001", "title": "", "description": "", "probability": "High|Medium|Low", "impact": "High|Medium|Low", "mitigation": "", "owner": ""}],
-  "assumptions": [{"id": "A001", "title": "", "description": "", "impact_if_wrong": "", "validation_method": ""}],
-  "issues": [{"id": "I001", "title": "", "description": "", "severity": "Critical|High|Medium|Low", "resolution": "", "owner": ""}],
-  "dependencies": [{"id": "D001", "title": "", "description": "", "type": "Internal|External", "due_date": "", "owner": ""}]
+  "risks": [{"id": "R001", "title": "string", "description": "string", "probability": "High|Medium|Low", "impact": "High|Medium|Low", "risk_score": "Critical|High|Medium|Low", "trigger_conditions": "string", "mitigation": "string", "contingency": "string", "owner": "string", "review_date": "string"}],
+  "assumptions": [{"id": "A001", "title": "string", "description": "string", "impact_if_wrong": "string", "validation_method": "string", "validation_by": "string", "owner": "string"}],
+  "issues": [{"id": "I001", "title": "string", "description": "string", "severity": "Critical|High|Medium|Low", "impact": "string", "resolution_plan": "string", "resolution_owner": "string", "target_resolution_date": "string"}],
+  "dependencies": [{"id": "D001", "title": "string", "description": "string", "type": "Internal|External", "due_date": "string", "dependency_owner": "string", "impact_if_delayed": "string", "status": "On Track|At Risk|Blocked"}]
 }
-
-Extract at minimum: 5 risks, 4 assumptions, 2 issues, 4 dependencies. Be specific and actionable."""
+"""
 
 
 async def run_raid_pipeline(raw_text: str) -> dict:
-    user_content = f"""Analyze this document and extract the RAID register:
-
-{raw_text[:10000] if raw_text else "No document provided. Generate a generic software project RAID register."}
-
-Return valid JSON only."""
-
-    response = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.2,
+    doc_context = (
+        raw_text[:80_000]
+        if raw_text
+        else "No document provided - generate a comprehensive RAID register for a typical enterprise software delivery project, inferring domain-specific risks from the project context described in the questionnaire."
     )
 
-    return json.loads(response.choices[0].message.content)
+    user_content = f"""Analyse this project document and extract a comprehensive RAID register specific to this project's domain, technology, and organisational context:
+
+{doc_context}
+
+Apply all rules from your system instructions. Every item must be specific to this project. Return valid JSON only - no markdown, no commentary."""
+
+    return await complete_json(
+        SYSTEM_PROMPT,
+        user_content,
+        schema=RaidDocumentModel,
+        temperature=0.15,
+        max_tokens=10000,
+    )
