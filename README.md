@@ -16,7 +16,7 @@ An AI-powered Business Analyst automation tool that generates professional docum
 | **Process Flow Diagram** | Mermaid.js diagrams, exportable as PNG / SVG / PDF |
 | **User Stories** | Acceptance criteria, edge cases, data points per feature |
 
-Documents are generated using GPT-4o, formatted to Invuric's branded Word template, and downloadable as `.docx` or `.pdf`.
+Documents are generated using Claude, formatted to Invuric's branded Word template, and downloadable as `.docx` or `.pdf`.
 
 ---
 
@@ -26,7 +26,7 @@ Documents are generated using GPT-4o, formatted to Invuric's branded Word templa
 |---|---|
 | Frontend | React + Vite + TypeScript + Tailwind CSS |
 | Backend | FastAPI (Python) |
-| AI | OpenAI GPT-4o |
+| AI | Anthropic Claude |
 | Database | Supabase (PostgreSQL) |
 | Storage | Supabase Storage (`outputs` bucket) |
 | DOCX | python-docx (template-copy for SOW, scratch for PRD/FRD) |
@@ -61,7 +61,7 @@ invuric-insights/
     ├── main.py                        # FastAPI app entry point
     ├── database.py                    # Supabase client
     ├── pipelines/
-    │   └── doc_pipeline.py            # OpenAI prompt + JSON schema for SOW/PRD/FRD
+    │   └── doc_pipeline.py            # Claude prompt + JSON schema for SOW/PRD/FRD
     ├── generators/
     │   └── docx_generator.py          # python-docx DOCX builder
     ├── templates/
@@ -86,7 +86,7 @@ invuric-insights/
 - Node.js 18+
 - Python 3.10+
 - Supabase project (with `sessions`, `documents`, `outputs` tables and `outputs` storage bucket)
-- OpenAI API key
+- Anthropic API key
 
 ### 1. Clone the repo
 
@@ -123,8 +123,9 @@ python -m venv .venv
 Create `backend/.env`:
 ```
 SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_service_role_key
-OPENAI_API_KEY=your_openai_api_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SUPABASE_ANON_KEY=your_supabase_anon_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
 ```
 
 Start the backend:
@@ -144,7 +145,7 @@ Questionnaire (answers saved to sessionStorage)
     ↓
 OutputFormat → POST /api/generate/{sow|prd|frd}
     ↓
-GPT-4o generates structured JSON
+Claude generates structured JSON
     ↓
 python-docx builds .docx from Invuric template
     ↓
