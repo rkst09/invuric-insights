@@ -5,24 +5,25 @@ import {
   AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Download, Eye,
   FileText, Image, MessageSquare, RefreshCw, Upload, X,
 } from "lucide-react";
-import { uploadFile, generateBacklog, type BacklogData, type UserStory } from "@/lib/api";
+import { uploadFile, generateBacklog, type GenerationStatusResponse, type UserStory } from "@/lib/api";
 
 type Stage = "input" | "processing" | "result" | "error";
 type DocFile    = { id: string; name: string; size: number; file: File };
-type ScreenFile = { id: string; name: string; url: string };
-
-const PROCESSING_MESSAGES = [
-  "Analyzing documents…",
-  "Understanding user journeys…",
-  "Generating user stories…",
-  "Structuring backlog…",
-];
+type ScreenFile = { id: string; name: string; url: string; file: File };
 
 const TABLE_HEADERS = [
   "Page Name", "High Level Flow", "User Story",
   "Acceptance Criteria", "Data Points", "Edge Cases",
   "Non-Functional", "Project ID", "Project Name", "Analyzed At",
 ];
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Generation failed. Please try again.";
+};
 
 const UserStories = () => {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ const UserStories = () => {
   const [isDraggingScreen, setIsDraggingScreen] = useState(false);
   const [processingMsg, setProcessingMsg]       = useState(0);
   const [processingPct, setProcessingPct]       = useState(0);
+  const [processingLabel, setProcessingLabel]   = useState("Preparing your product backlog...");
   const [showFullTable, setShowFullTable]       = useState(false);
   const [exportToast, setExportToast]           = useState(false);
   const [errorMsg, setErrorMsg]                 = useState("");
@@ -55,7 +57,12 @@ const UserStories = () => {
     Array.from(incoming).forEach(f => {
       const reader = new FileReader();
       reader.onload = e => {
-        setScreenFiles(prev => [...prev, { id: `${f.name}_${Date.now()}`, name: f.name, url: e.target?.result as string }]);
+        setScreenFiles(prev => [...prev, {
+          id: `${f.name}_${Date.now()}`,
+          name: f.name,
+          url: e.target?.result as string,
+          file: f,
+        }]);
       };
       reader.readAsDataURL(f);
     });
@@ -66,31 +73,51 @@ const UserStories = () => {
     setStage("processing");
     setProcessingPct(0);
     setProcessingMsg(0);
-
-    let pct = 0;
-    const interval = setInterval(() => {
-      pct += Math.random() * 12 + 4;
-      if (pct >= 88) { pct = 88; clearInterval(interval); }
-      setProcessingPct(pct);
-      setProcessingMsg(Math.min(Math.floor((pct / 100) * PROCESSING_MESSAGES.length), PROCESSING_MESSAGES.length - 1));
-    }, 500);
+    setProcessingLabel("Uploading and preparing your inputs...");
 
     try {
-      const uploadRes = await uploadFile(docFiles[0].file);
-      const project_name = docFiles[0].name.replace(/\.[^.]+$/, "") || "Project";
+      let activeSessionId: string | undefined;
+      const allFiles = [
+        ...docFiles.map((item) => item.file),
+        ...screenFiles.map((item) => item.file),
+      ];
+
+      for (const file of allFiles) {
+        const uploadRes = await uploadFile(file, activeSessionId);
+        activeSessionId = uploadRes.session_id;
+      }
+
+      const supplementalContext = [
+        flowDesc.trim() ? `User flow notes:\n${flowDesc.trim()}` : "",
+        screenFiles.length > 0
+          ? `Uploaded screen references:\n${screenFiles.map((file) => `- ${file.name}`).join("\n")}`
+          : "",
+      ].filter(Boolean).join("\n\n");
+
       const backlogRes = await generateBacklog({
-        session_id: uploadRes.session_id,
+        session_id: activeSessionId ?? "",
         project_name: docFiles[0].name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " "),
         project_id: `PRJ-${Date.now().toString().slice(-6)}`,
+        supplemental_context: supplementalContext,
+        onProgress: (status: GenerationStatusResponse) => {
+          const progress = status.generation?.progress;
+          const message = status.generation?.message;
+          if (typeof progress === "number") {
+            setProcessingPct(progress);
+            setProcessingMsg(Math.min(Math.floor((progress / 100) * 4), 3));
+          }
+          if (message) {
+            setProcessingLabel(message);
+          }
+        },
       });
       setStories(backlogRes.data.stories || []);
       setDownloadUrl(backlogRes.download_url);
-      clearInterval(interval);
       setProcessingPct(100);
+      setProcessingLabel("Product backlog ready.");
       setTimeout(() => setStage("result"), 400);
-    } catch (err: any) {
-      clearInterval(interval);
-      setErrorMsg(err.message || "Generation failed. Please try again.");
+    } catch (err: unknown) {
+      setErrorMsg(getErrorMessage(err));
       setStage("error");
     }
   };
@@ -265,7 +292,7 @@ const UserStories = () => {
                         <MessageSquare className="w-7 h-7 text-primary" />
                       </div>
                     </div>
-                    <h2 className="text-[22px] font-semibold text-foreground mb-2">{PROCESSING_MESSAGES[processingMsg]}</h2>
+                    <h2 className="text-[22px] font-semibold text-foreground mb-2">{processingLabel}</h2>
                     <p className="text-sm text-muted-foreground mb-8">Analyzing {docFiles.length} document{docFiles.length !== 1 ? "s" : ""}</p>
                     <div className="w-full bg-secondary border border-border rounded-full h-1.5 overflow-hidden">
                       <div className="h-full bg-primary rounded-full transition-all duration-500 ease-out" style={{ width: `${processingPct}%` }} />

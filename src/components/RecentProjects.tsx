@@ -89,7 +89,7 @@ const RecentProjects = () => {
         {projects.map((p) => {
           const type  = (p.module_type || "unknown").toUpperCase();
           const badge = TYPE_BADGE[p.module_type] ?? "blue";
-          const name  = (p.metadata?.project_name as string) || (p.metadata?.filename as string) || `Session ${p.id.slice(0, 8)}`;
+          const name  = p.project_name || (p.metadata?.project_name as string) || (p.metadata?.filename as string) || `Session ${p.id.slice(0, 8)}`;
 
           return (
             <div
@@ -114,7 +114,10 @@ const RecentProjects = () => {
 
               <div className="flex items-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
                 <button
-                  onClick={(e) => { e.stopPropagation(); downloadDocument(p.id, `${p.module_type}_docx`); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void downloadDocument(p.id, undefined, p.module_type);
+                  }}
                   className="p-1.5 rounded hover:bg-muted transition-colors duration-200"
                   title="Download"
                 >

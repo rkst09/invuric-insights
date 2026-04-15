@@ -1,7 +1,15 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import AppSidebar from "@/components/AppSidebar";
-import { generateDocument, createSession } from "@/lib/api";
+import {
+  createSession,
+  generateDocument,
+  type GenerationStatusResponse,
+  getSystemCapabilities,
+  updateSessionMetadata,
+  uploadFile,
+  type SystemCapabilities,
+} from "@/lib/api";
 import {
   ArrowLeft,
   ArrowRight,
@@ -33,27 +41,86 @@ const OutputFormat = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [exportFormat, setExportFormat] = useState<FileExport>("docx");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationMessage, setGenerationMessage] = useState<string | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [capabilities, setCapabilities] = useState<SystemCapabilities | null>(null);
+  const [loadingCapabilities, setLoadingCapabilities] = useState(true);
+  const [templateDocumentId, setTemplateDocumentId] = useState<string | null>(null);
+  const [templateSessionId, setTemplateSessionId] = useState<string | null>(null);
+  const [templateStoragePath, setTemplateStoragePath] = useState<string | null>(null);
+  const [templateFileType, setTemplateFileType] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getSystemCapabilities()
+      .then((result) => {
+        if (isMounted) {
+          setCapabilities(result);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setCapabilities({
+            pdf_export_available: false,
+            pdf_export_reason: "Live export capabilities could not be verified.",
+            client_template_available: false,
+            client_template_reason: "Client template support could not be verified.",
+            supported_templates: ["invuric"],
+          });
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoadingCapabilities(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const pdfAvailable = capabilities?.pdf_export_available ?? false;
+  const clientTemplateAvailable = capabilities?.client_template_available ?? false;
+
+  useEffect(() => {
+    if (!pdfAvailable && exportFormat === "pdf") {
+      setExportFormat("docx");
+    }
+  }, [exportFormat, pdfAvailable]);
 
   const handleBack = () => navigate(-1);
 
   const handleSelectInvuric = () => {
     setSelected("INVURIC");
     setUploadedFile(null);
+    setTemplateDocumentId(null);
+    setTemplateSessionId(null);
+    setTemplateStoragePath(null);
+    setTemplateFileType(null);
   };
 
   const handleSelectClient = () => {
+    if (!clientTemplateAvailable) return;
     setSelected("CLIENT");
   };
 
   const handleFileChange = (file: File | null) => {
     if (!file) return;
     const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
-    if (allowed.includes(file.type)) setUploadedFile(file);
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (allowed.includes(file.type) || extension === "pdf" || extension === "docx") {
+      setUploadedFile(file);
+      setTemplateDocumentId(null);
+      setTemplateSessionId(null);
+      setTemplateStoragePath(null);
+      setTemplateFileType(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -63,22 +130,58 @@ const OutputFormat = () => {
     if (file) handleFileChange(file);
   };
 
-  const canGenerate = selected === "INVURIC" || (selected === "CLIENT" && uploadedFile);
+  const canGenerate =
+    !loadingCapabilities &&
+    (selected === "INVURIC" || (selected === "CLIENT" && clientTemplateAvailable && uploadedFile));
 
   const handleGenerate = async () => {
     if (!canGenerate || isGenerating) return;
     setIsGenerating(true);
     setGenerateError(null);
+    setGenerationMessage("Preparing your document generation request...");
 
     try {
+      if (selected === "CLIENT" && !clientTemplateAvailable) {
+        throw new Error(capabilities?.client_template_reason || "Client template generation is not available on this deployment.");
+      }
+
+      const draftKey = `invuric_answers_${docType.toLowerCase()}`;
       const answers: Record<string, string> = JSON.parse(
-        sessionStorage.getItem("invuric_answers") || "{}"
+        localStorage.getItem(draftKey) || "{}"
       );
 
       let sid = searchParams.get("session_id") || "";
       if (!sid) {
-        const session = await createSession(docType.toLowerCase());
+        const projectName = answers["org_name"]?.trim()
+          || `${docType} — ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
+        const session = await createSession(docType.toLowerCase(), { project_name: projectName });
         sid = session.id;
+      }
+
+      if (selected === "CLIENT" && uploadedFile) {
+        let documentId = templateDocumentId;
+        let storagePath = templateStoragePath || "";
+        let fileType = templateFileType || uploadedFile.name.split(".").pop()?.toLowerCase() || "";
+
+        if (!documentId || templateSessionId !== sid) {
+          const uploadResult = await uploadFile(uploadedFile, sid);
+          documentId = uploadResult.document_id;
+          storagePath = uploadResult.storage_path;
+          fileType = uploadResult.file_type || fileType;
+          setTemplateDocumentId(documentId);
+          setTemplateSessionId(sid);
+          setTemplateStoragePath(storagePath);
+          setTemplateFileType(fileType);
+        }
+
+        await updateSessionMetadata(sid, {
+          client_template: {
+            document_id: documentId,
+            filename: uploadedFile.name,
+            file_type: fileType,
+            storage_path: storagePath,
+          },
+        });
       }
 
       const result = await generateDocument({
@@ -86,13 +189,26 @@ const OutputFormat = () => {
         session_id: sid,
         answers,
         export_format: exportFormat,
-        template: "invuric",
+        template: selected === "CLIENT" ? "client" : "invuric",
+        onProgress: (status: GenerationStatusResponse) => {
+          if (status.generation?.message) {
+            setGenerationMessage(status.generation.message);
+          }
+        },
       });
 
       setDownloadUrl(result.download_url);
+      // Clear saved answers so they don't bleed into the next generation session
+      localStorage.removeItem(draftKey);
+      setGenerationMessage("Document ready.");
       setIsGenerating(false);
     } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : "Generation failed. Please try again.");
+      const raw = err instanceof Error ? err.message : "";
+      const friendly = raw.toLowerCase().includes("failed to fetch") || raw.toLowerCase().includes("networkerror")
+        ? "Cannot reach the server. Please check your connection or try again in a moment."
+        : raw || "Generation failed. Please try again.";
+      setGenerateError(friendly);
+      setGenerationMessage(null);
       setIsGenerating(false);
     }
   };
@@ -191,6 +307,16 @@ const OutputFormat = () => {
                 </p>
               </div>
 
+              {!loadingCapabilities && (
+                <div className="text-center -mt-3 pb-8 animate-fade-up">
+                  <p className="text-[12px] text-muted-foreground max-w-[520px] mx-auto leading-relaxed">
+                    {pdfAvailable
+                      ? "This deployment supports Word and PDF export."
+                      : "This deployment currently supports Word export only. PDF will re-enable automatically when the document converter is available."}
+                  </p>
+                </div>
+              )}
+
               {/* Format cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-[900px] mx-auto">
 
@@ -264,18 +390,21 @@ const OutputFormat = () => {
                   className={`
                     group relative flex flex-col rounded-2xl border bg-card
                     animate-fade-up transition-all duration-200
-                    ${selected === "CLIENT"
+                    ${clientTemplateAvailable && selected === "CLIENT"
                       ? "border-primary bg-[hsl(215_50%_8%)] shadow-[0_0_0_1px_hsl(var(--primary)),0_0_28px_rgba(59,130,246,0.18)]"
-                      : "border-border hover:border-primary hover:-translate-y-[4px] hover:shadow-[0_0_0_1px_rgba(59,130,246,0.15),0_8px_32px_rgba(59,130,246,0.08)]"
+                      : clientTemplateAvailable
+                        ? "border-border hover:border-primary hover:-translate-y-[4px] hover:shadow-[0_0_0_1px_rgba(59,130,246,0.15),0_8px_32px_rgba(59,130,246,0.08)]"
+                        : "border-border/70 opacity-70"
                     }
                   `}
                   style={{ animationDelay: "60ms" }}
                 >
                   <button
                     onClick={handleSelectClient}
+                    disabled={!clientTemplateAvailable}
                     className="text-left flex flex-col p-8 pb-5 w-full"
                   >
-                    {selected === "CLIENT" && (
+                    {selected === "CLIENT" && clientTemplateAvailable && (
                       <div className="absolute top-4 right-4">
                         <CheckCircle2 className="w-4 h-4 text-primary" />
                       </div>
@@ -286,7 +415,7 @@ const OutputFormat = () => {
                         <FileText className="w-5 h-5 text-primary" />
                       </div>
                       <span className="font-mono-label text-[10px] tracking-widest text-primary">
-                        OPTION 02
+                        {clientTemplateAvailable ? "OPTION 02" : "ENTERPRISE"}
                       </span>
                     </div>
 
@@ -297,14 +426,19 @@ const OutputFormat = () => {
                       Upload your client's template and we'll generate the {docType} in their format.
                     </p>
                     <p className="text-[12px] text-[hsl(0_0%_53%)] italic mt-1.5">
-                      Best for client-specific requirements
+                      {clientTemplateAvailable
+                        ? "DOCX preserves client styling; PDF uses the client's structure and terminology as a generation guide"
+                        : capabilities?.client_template_reason || "Client template support is not enabled on this deployment yet."}
                     </p>
                   </button>
 
                   {/* Expandable upload area */}
                   <div
                     className="overflow-hidden transition-all duration-300 ease-out"
-                    style={{ maxHeight: selected === "CLIENT" ? "300px" : "0px", opacity: selected === "CLIENT" ? 1 : 0 }}
+                    style={{
+                      maxHeight: selected === "CLIENT" && clientTemplateAvailable ? "300px" : "0px",
+                      opacity: selected === "CLIENT" && clientTemplateAvailable ? 1 : 0,
+                    }}
                   >
                     <div className="px-8 pb-6">
                       <div className="h-px bg-[hsl(0_0%_10%)] mb-5" />
@@ -332,6 +466,9 @@ const OutputFormat = () => {
                           <p className="font-mono-label text-[10px] text-[hsl(0_0%_33%)] tracking-wider">
                             DOCX · PDF
                           </p>
+                          <p className="text-[11px] text-muted-foreground/80 text-center max-w-[280px]">
+                            Use DOCX to preserve layout and styling. Use PDF to mirror the client&apos;s structure, section naming, and language.
+                          </p>
                           <input
                             ref={fileInputRef}
                             type="file"
@@ -350,7 +487,14 @@ const OutputFormat = () => {
                             </p>
                           </div>
                           <button
-                            onClick={(e) => { e.stopPropagation(); setUploadedFile(null); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUploadedFile(null);
+                              setTemplateDocumentId(null);
+                              setTemplateSessionId(null);
+                              setTemplateStoragePath(null);
+                              setTemplateFileType(null);
+                            }}
                             className="p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -386,13 +530,16 @@ const OutputFormat = () => {
                     {(["docx", "pdf"] as FileExport[]).map((fmt) => (
                       <button
                         key={fmt}
+                        disabled={fmt === "pdf" && !pdfAvailable}
                         onClick={() => setExportFormat(fmt)}
                         className={`
                           px-3 py-1 rounded-md font-mono-label text-[11px] tracking-wider
                           transition-all duration-150
-                          ${exportFormat === fmt
-                            ? "bg-primary text-white"
-                            : "text-muted-foreground hover:text-foreground"
+                          ${fmt === "pdf" && !pdfAvailable
+                            ? "text-muted-foreground/50 cursor-not-allowed"
+                            : exportFormat === fmt
+                              ? "bg-primary text-white"
+                              : "text-muted-foreground hover:text-foreground"
                           }
                         `}
                       >
@@ -401,6 +548,11 @@ const OutputFormat = () => {
                     ))}
                   </div>
                 </div>
+                {!pdfAvailable && (
+                  <p className="text-[12px] text-muted-foreground mt-2">
+                    {capabilities?.pdf_export_reason || "PDF export is currently unavailable on this deployment."}
+                  </p>
+                )}
               </div>
 
               {/* Success panel */}
@@ -435,8 +587,20 @@ const OutputFormat = () => {
 
               {/* Error banner */}
               {generateError && (
-                <div className="max-w-[900px] mx-auto mt-4 px-4 py-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-sm animate-fade-up">
-                  {generateError}
+                <div className="max-w-[900px] mx-auto mt-4 px-4 py-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-sm animate-fade-up flex items-center justify-between gap-4">
+                  <span>{generateError}</span>
+                  <button
+                    onClick={() => { setGenerateError(null); handleGenerate(); }}
+                    className="shrink-0 px-3 py-1 rounded-lg border border-rose-500/40 hover:bg-rose-500/20 transition-colors text-xs font-medium"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {isGenerating && generationMessage && (
+                <div className="max-w-[900px] mx-auto mt-4 px-4 py-3 rounded-xl border border-primary/20 bg-primary/10 text-primary text-sm animate-fade-up">
+                  {generationMessage}
                 </div>
               )}
 
@@ -459,7 +623,7 @@ const OutputFormat = () => {
                   {!isGenerating && <ArrowRight className="w-4 h-4" />}
                 </button>
 
-                {selected === "CLIENT" && !uploadedFile && (
+                {selected === "CLIENT" && clientTemplateAvailable && !uploadedFile && (
                   <p className="text-[12px] text-muted-foreground italic">
                     Upload a template to continue
                   </p>

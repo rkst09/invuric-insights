@@ -5,7 +5,7 @@ import {
   AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronRight,
   Download, Eye, FileText, Network, RefreshCw, Upload, X,
 } from "lucide-react";
-import { uploadFile, generateWbs, type WbsData, type WbsPhase } from "@/lib/api";
+import { uploadFile, generateWbs, type GenerationStatusResponse, type WbsData } from "@/lib/api";
 
 type Stage = "upload" | "processing" | "result" | "error";
 type Audience = "PM" | "Developers" | "Designers" | "QA" | "Stakeholders";
@@ -18,19 +18,20 @@ const AUDIENCES: { id: Audience; label: string }[] = [
   { id: "Stakeholders", label: "Business / Stakeholders" },
 ];
 
-const PROCESSING_MESSAGES = [
-  "Analyzing project requirements…",
-  "Breaking down features into tasks…",
-  "Structuring phases and subtasks…",
-  "Optimizing for selected roles…",
-];
-
 const PHASE_COLORS = [
   "text-blue-400 bg-blue-500/10 border-blue-500/20",
   "text-purple-400 bg-purple-500/10 border-purple-500/20",
   "text-green-400 bg-green-500/10 border-green-500/20",
   "text-orange-400 bg-orange-500/10 border-orange-500/20",
 ];
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Generation failed. Please try again.";
+};
 
 const WBSGenerator = () => {
   const navigate = useNavigate();
@@ -41,6 +42,7 @@ const WBSGenerator = () => {
   const [selected, setSelected]             = useState<Audience[]>(["PM", "Developers"]);
   const [processingMsg, setProcessingMsg]   = useState(0);
   const [processingPct, setProcessingPct]   = useState(0);
+  const [processingLabel, setProcessingLabel] = useState("Preparing your work breakdown structure...");
   const [showFullTable, setShowFullTable]   = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set(["P1"]));
   const [exportToast, setExportToast]       = useState(false);
@@ -62,7 +64,12 @@ const WBSGenerator = () => {
   const togglePhase = (id: string) => {
     setExpandedPhases(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
       return next;
     });
   };
@@ -72,30 +79,38 @@ const WBSGenerator = () => {
     setStage("processing");
     setProcessingPct(0);
     setProcessingMsg(0);
-
-    let pct = 0;
-    const interval = setInterval(() => {
-      pct += Math.random() * 12 + 4;
-      if (pct >= 88) { pct = 88; clearInterval(interval); }
-      setProcessingPct(pct);
-      setProcessingMsg(Math.min(Math.floor((pct / 100) * PROCESSING_MESSAGES.length), PROCESSING_MESSAGES.length - 1));
-    }, 500);
+    setProcessingLabel("Uploading and preparing your documents...");
 
     try {
-      const uploadRes = await uploadFile(fileObjs[0]);
-      const wbsRes = await generateWbs(uploadRes.session_id, selected);
+      let activeSessionId: string | undefined;
+
+      for (const file of fileObjs) {
+        const uploadRes = await uploadFile(file, activeSessionId);
+        activeSessionId = uploadRes.session_id;
+      }
+
+      const wbsRes = await generateWbs(activeSessionId ?? "", selected, (status: GenerationStatusResponse) => {
+        const progress = status.generation?.progress;
+        const message = status.generation?.message;
+        if (typeof progress === "number") {
+          setProcessingPct(progress);
+          setProcessingMsg(Math.min(Math.floor((progress / 100) * 4), 3));
+        }
+        if (message) {
+          setProcessingLabel(message);
+        }
+      });
       setWbsData(wbsRes.data);
       setDownloadUrl(wbsRes.download_url);
       // expand first phase
       if (wbsRes.data.phases?.length > 0) {
         setExpandedPhases(new Set([wbsRes.data.phases[0].id]));
       }
-      clearInterval(interval);
       setProcessingPct(100);
+      setProcessingLabel("WBS ready.");
       setTimeout(() => setStage("result"), 400);
-    } catch (err: any) {
-      clearInterval(interval);
-      setErrorMsg(err.message || "Generation failed. Please try again.");
+    } catch (err: unknown) {
+      setErrorMsg(getErrorMessage(err));
       setStage("error");
     }
   };
@@ -174,7 +189,7 @@ const WBSGenerator = () => {
                       <p className="text-[14px] text-foreground">Drop files here or <span className="text-primary">browse</span></p>
                       <p className="font-mono-label text-[11px] text-muted-foreground mt-1.5 tracking-wider">PDF · DOCX</p>
                     </div>
-                    <input ref={fileInputRef} type="file" accept=".pdf,.docx" className="hidden"
+                    <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx" className="hidden"
                       onChange={(e) => e.target.files && addFiles(e.target.files)} />
                   </div>
 
@@ -230,7 +245,7 @@ const WBSGenerator = () => {
                     <div className="w-16 h-16 rounded-2xl bg-secondary border border-border flex items-center justify-center mx-auto mb-6">
                       <RefreshCw className="w-7 h-7 text-primary animate-spin" style={{ animationDuration: "2s" }} />
                     </div>
-                    <h2 className="text-[22px] font-semibold text-foreground mb-2">{PROCESSING_MESSAGES[processingMsg]}</h2>
+                    <h2 className="text-[22px] font-semibold text-foreground mb-2">{processingLabel}</h2>
                     <p className="text-sm text-muted-foreground mb-8">Structuring for: {selected.join(", ")}</p>
                     <div className="w-full bg-secondary border border-border rounded-full h-1.5 overflow-hidden">
                       <div className="h-full bg-primary rounded-full transition-all duration-500 ease-out" style={{ width: `${processingPct}%` }} />

@@ -2,13 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import AppSidebar from "@/components/AppSidebar";
 import {
   FolderOpen, FileText, Clock, TrendingUp, Search,
-  MoreHorizontal, Download, Eye, CheckCircle2,
-  Circle, X, ArrowRight,
+  MoreHorizontal, Download, Eye, X, ArrowRight, Trash2,
 } from "lucide-react";
 import {
-  fetchRecentProjects, getSession, Session,
-  downloadDocument, previewDocument, exportAllDocuments,
-  continueProject, renameProject, duplicateProject, deleteProject,
+  fetchRecentProjects, getSession, SessionDetail,
+  downloadDocument, previewDocument, deleteProject,
 } from "@/lib/api";
 
 type DocType = "SOW" | "PRD" | "FRD" | "RAID" | "WBS" | "Stories";
@@ -64,24 +62,32 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function sessionToProject(s: Session & { documents?: any[]; outputs?: any[] }): Project {
+function getDocumentFormat(outputType: string): string {
+  if (outputType.includes("pdf")) return "PDF";
+  if (outputType.includes("xlsx")) return "XLSX";
+  if (outputType.includes("mermaid")) return "MMD";
+  return "DOCX";
+}
+
+function sessionToProject(s: SessionDetail): Project {
   const docType = MODULE_TO_PILL[s.module_type] ?? "SOW";
   const status  = STATUS_MAP[s.status] ?? "Draft";
-  const name    = (s.metadata?.project_name as string)
+  const name    = s.project_name
+                || (s.metadata?.project_name as string)
                 || (s.metadata?.filename as string)
                 || `Session ${s.id.slice(0, 8)}`;
   const client  = (s.metadata?.client_name as string) || "—";
 
-  const docs: ProjectDoc[] = (s.outputs ?? []).map((o: any) => ({
+  const docs: ProjectDoc[] = (s.outputs ?? []).map((o) => ({
     name: o.output_type?.replace(/_/g, " ").toUpperCase() ?? "Document",
-    format: o.output_type?.includes("pdf") ? "PDF" : "DOCX",
+    format: getDocumentFormat(o.output_type ?? ""),
     size: "—",
     outputType: o.output_type ?? "",
   }));
 
   const timeline: TimelineEntry[] = [
     { date: timeAgo(s.created_at), action: `${docType} Created`, sub: name },
-    ...(s.outputs ?? []).map((o: any) => ({
+    ...(s.outputs ?? []).map((o) => ({
       date: timeAgo(s.created_at),
       action: `${o.output_type?.replace(/_/g, " ").toUpperCase()} Generated`,
       sub: "Invuric format",
@@ -139,7 +145,8 @@ const PreviousProjects = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<{ id: string; top: number; right: number } | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [projects, setProjects]   = useState<Project[]>([]);
   const [loading, setLoading]     = useState(true);
 
@@ -167,7 +174,7 @@ const PreviousProjects = () => {
     setSelectedProject(project);
     setIsPanelOpen(true);
     getSession(project.id)
-      .then((full) => setSelectedProject(sessionToProject(full as any)))
+      .then((full) => setSelectedProject(sessionToProject(full)))
       .catch(() => {});
   };
 
@@ -178,11 +185,15 @@ const PreviousProjects = () => {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isPanelOpen) handleClosePanel();
+      if (e.key === "Escape") {
+        if (confirmDeleteId) { setConfirmDeleteId(null); return; }
+        if (menuAnchor) { setMenuAnchor(null); return; }
+        if (isPanelOpen) handleClosePanel();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [isPanelOpen, handleClosePanel]);
+  }, [confirmDeleteId, handleClosePanel, isPanelOpen, menuAnchor]);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -197,7 +208,7 @@ const PreviousProjects = () => {
                 <div>
                   <h1 className="text-[22px] font-medium text-foreground">Previous Projects</h1>
                   <p className="font-mono-label text-xs text-[hsl(0_0%_27%)] mt-1">
-                    14 projects · 47 documents generated
+                    {projects.length} {projects.length === 1 ? "project" : "projects"} · {projects.filter(p => p.status === "Complete").length} documents generated
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -303,46 +314,31 @@ const PreviousProjects = () => {
                     </div>
 
                     {/* Right block */}
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleOpenProject(project); }}
                         className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-transparent border border-border text-primary text-xs px-4 py-2 rounded-lg hover:bg-primary hover:text-primary-foreground"
                       >
                         Open <span className="inline-block transition-transform duration-200 group-hover:translate-x-0.5">→</span>
                       </button>
-                      <div className="relative">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === project.id ? null : project.id); }}
-                          className="p-1.5 rounded-lg hover:bg-secondary transition-colors duration-200"
-                        >
-                          <MoreHorizontal className="w-4 h-4 text-[hsl(0_0%_27%)]" />
-                        </button>
-                        {openMenuId === project.id && (
-                          <>
-                            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); }} />
-                            <div className="absolute right-0 top-full mt-1 z-50 w-44 bg-secondary border border-border rounded-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 overflow-hidden">
-                              {[
-                                { label: "Rename", fn: () => renameProject(project.id) },
-                                { label: "Duplicate", fn: () => duplicateProject(project.id) },
-                                { label: "Export All", fn: () => exportAllDocuments(project.id) },
-                                { label: "Delete", fn: () => deleteProject(project.id), destructive: true },
-                              ].map((item) => (
-                                <button
-                                  key={item.label}
-                                  onClick={(e) => { e.stopPropagation(); item.fn(); setOpenMenuId(null); }}
-                                  className={`w-full text-left px-4 py-2.5 text-[13px] transition-colors duration-150 ${
-                                    (item as any).destructive
-                                      ? "text-foreground hover:text-destructive hover:bg-[hsl(0_0%_12%)]"
-                                      : "text-foreground hover:bg-[hsl(0_0%_12%)]"
-                                  }`}
-                                >
-                                  {item.label}
-                                </button>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      <button
+                        title="Delete project"
+                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(project.id); setMenuAnchor(null); }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setMenuAnchor(menuAnchor?.id === project.id ? null : { id: project.id, top: rect.bottom + 6, right: window.innerWidth - rect.right });
+                          setConfirmDeleteId(null);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-secondary transition-colors duration-200"
+                      >
+                        <MoreHorizontal className="w-4 h-4 text-[hsl(0_0%_27%)]" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -351,6 +347,59 @@ const PreviousProjects = () => {
           </div>
         </main>
 
+
+        {/* ⋯ Context menu — fixed so it escapes stacking contexts */}
+        {menuAnchor && (
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={() => { setMenuAnchor(null); setConfirmDeleteId(null); }} />
+            <div
+              className="fixed z-[61] w-52 bg-[hsl(0_0%_10%)] border border-border rounded-[12px] shadow-[0_16px_48px_rgba(0,0,0,0.6)] py-1.5"
+              style={{ top: menuAnchor.top, right: menuAnchor.right }}
+            >
+              <button
+                onClick={() => { setConfirmDeleteId(menuAnchor.id); setMenuAnchor(null); }}
+                className="w-full text-left px-4 py-2.5 text-[13px] text-destructive hover:bg-destructive/10 transition-colors duration-150 flex items-center gap-2.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete project
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Delete confirm modal */}
+        {confirmDeleteId && (
+          <>
+            <div className="fixed inset-0 z-[60] bg-black/60" onClick={() => setConfirmDeleteId(null)} />
+            <div className="fixed z-[61] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] bg-[hsl(0_0%_10%)] border border-border rounded-[16px] shadow-[0_24px_64px_rgba(0,0,0,0.7)] p-6">
+              <div className="w-10 h-10 rounded-full bg-destructive/15 flex items-center justify-center mb-4">
+                <Trash2 className="w-5 h-5 text-destructive" />
+              </div>
+              <h3 className="text-[15px] font-medium text-foreground mb-1">Delete project?</h3>
+              <p className="text-[13px] text-muted-foreground mb-6">This will permanently delete the project and all its generated documents. This cannot be undone.</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="flex-1 px-4 py-2.5 rounded-[10px] border border-border text-[13px] text-foreground hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const id = confirmDeleteId;
+                    setConfirmDeleteId(null);
+                    setProjects((prev) => prev.filter((p) => p.id !== id));
+                    if (selectedProject?.id === id) handleClosePanel();
+                    deleteProject(id).catch(() => {});
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-[10px] bg-destructive text-white text-[13px] font-medium hover:bg-destructive/80 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* PDP Overlay */}
         {(isPanelOpen || selectedProject) && (
@@ -375,12 +424,17 @@ const PreviousProjects = () => {
                   <X className="w-5 h-5" />
                 </button>
                 <span className="text-base font-medium text-foreground">{selectedProject.name}</span>
-                <button
-                  onClick={() => exportAllDocuments(selectedProject.id)}
-                  className="text-xs text-muted-foreground border border-border px-3.5 py-1.5 rounded-lg hover:border-primary hover:text-primary transition-all duration-200"
-                >
-                  Export All
-                </button>
+                {selectedProject.documents.length > 0 ? (
+                  <button
+                    onClick={() => void downloadDocument(selectedProject.id, selectedProject.documents[0].outputType)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground border border-border px-3.5 py-1.5 rounded-lg hover:border-primary hover:text-primary transition-all duration-200"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download
+                  </button>
+                ) : (
+                  <div className="w-[90px]" />
+                )}
               </div>
 
               {/* Block 1 — Overview */}
@@ -427,13 +481,13 @@ const PreviousProjects = () => {
                       <div className="flex items-center gap-4">
                         <span className="font-mono-label text-[11px] text-[hsl(0_0%_27%)]">{doc.size}</span>
                         <button
-                          onClick={() => downloadDocument(selectedProject.id, doc.outputType)}
+                          onClick={() => void downloadDocument(selectedProject.id, doc.outputType)}
                           className="text-primary hover:scale-110 transition-transform duration-150"
                         >
                           <Download className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => previewDocument(selectedProject.id, doc.name)}
+                          onClick={() => void previewDocument(selectedProject.id, doc.outputType)}
                           className="text-muted-foreground hover:text-foreground transition-colors duration-150"
                         >
                           <Eye className="w-4 h-4" />
@@ -446,30 +500,6 @@ const PreviousProjects = () => {
 
               <div className="mx-7 my-6 h-px bg-[hsl(0_0%_10%)]" />
 
-              {/* Block 3 — Modules */}
-              <div className="px-7">
-                <p className="font-mono-label text-[10px] text-[hsl(0_0%_27%)] tracking-[0.1em] mb-4">MODULE PROGRESS</p>
-                <div className="space-y-1">
-                  {selectedProject.modules.map((mod) => (
-                    <div key={mod.name} className="flex items-center justify-between py-2.5 px-1">
-                      <span className="text-[13px] text-foreground">{mod.name}</span>
-                      {mod.status === "complete" && <CheckCircle2 className="w-4 h-4 text-[hsl(142_71%_45%)]" />}
-                      {mod.status === "in-progress" && <Circle className="w-4 h-4 text-primary animate-pulse-glow" />}
-                      {mod.status === "not-started" && <Circle className="w-4 h-4 text-[hsl(0_0%_16%)]" />}
-                    </div>
-                  ))}
-                </div>
-                {selectedProject.status !== "Complete" && (
-                  <button
-                    onClick={() => continueProject(selectedProject.id)}
-                    className="w-full mt-5 border border-primary text-primary rounded-lg py-3 text-sm font-medium hover:bg-primary hover:text-primary-foreground transition-all duration-200"
-                  >
-                    Continue where you left off →
-                  </button>
-                )}
-              </div>
-
-              <div className="mx-7 my-6 h-px bg-[hsl(0_0%_10%)]" />
 
               {/* Block 4 — Timeline */}
               <div className="px-7 pb-8">

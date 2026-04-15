@@ -12,7 +12,7 @@ import {
   Eye,
   CheckCircle2,
 } from "lucide-react";
-import { uploadFile, generateRaid, type RaidData, type RaidItem } from "@/lib/api";
+import { uploadFile, generateRaid, type GenerationStatusResponse, type RaidData, type RaidItem } from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,13 +27,6 @@ type RAIDRow = {
   owner: string;
 };
 
-const PROCESSING_MESSAGES = [
-  "Analyzing your documents…",
-  "Identifying risks and dependencies…",
-  "Extracting structured insights…",
-  "Preparing your RAID document…",
-];
-
 const TYPE_CONFIG: Record<RAIDType, { icon: typeof AlertTriangle; color: string; bg: string }> = {
   Risk:        { icon: AlertTriangle, color: "text-red-400",    bg: "bg-red-500/10 border-red-500/20" },
   Assumption:  { icon: HelpCircle,   color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20" },
@@ -46,6 +39,14 @@ const IMPACT_COLOR: Record<string, string> = {
   Critical: "text-red-400 bg-red-500/10 border-red-500/20",
   Medium:   "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
   Low:      "text-green-400 bg-green-500/10 border-green-500/20",
+};
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Something went wrong. Please try again.";
 };
 
 // ─── Flatten API response into table rows ─────────────────────────────────────
@@ -70,6 +71,7 @@ const RaidDocument = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [processingMsg, setProcessingMsg] = useState(0);
   const [processingPct, setProcessingPct] = useState(0);
+  const [processingLabel, setProcessingLabel] = useState("Preparing your RAID document...");
   const [showFullTable, setShowFullTable] = useState(false);
   const [exportToast, setExportToast] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -96,49 +98,67 @@ const RaidDocument = () => {
 
   // ── Auto-trigger when file added ────────────────────────────────────────────
 
-  useEffect(() => {
-    if (fileObjs.length === 0 || stage !== "upload") return;
-    const timer = setTimeout(() => startProcessing(), 600);
-    return () => clearTimeout(timer);
-  }, [fileObjs]);
 
   // ── Processing: upload + generate ──────────────────────────────────────────
 
-  const startProcessing = async () => {
+  const startProcessing = useCallback(async () => {
+    if (fileObjs.length === 0) {
+      return;
+    }
+
     setStage("processing");
     setProcessingPct(0);
     setProcessingMsg(0);
-
-    // Animate progress while API runs
-    let pct = 0;
-    const interval = setInterval(() => {
-      pct += Math.random() * 12 + 4;
-      if (pct >= 88) { pct = 88; clearInterval(interval); }
-      setProcessingPct(pct);
-      setProcessingMsg(Math.min(Math.floor((pct / 100) * PROCESSING_MESSAGES.length), PROCESSING_MESSAGES.length - 1));
-    }, 500);
+    setProcessingLabel("Uploading and preparing your documents...");
 
     try {
-      // 1. Upload file
-      const uploadRes = await uploadFile(fileObjs[0]);
-      setSessionId(uploadRes.session_id);
+      let activeSessionId: string | undefined;
 
-      // 2. Generate RAID
-      const raidRes = await generateRaid(uploadRes.session_id);
+      for (const file of fileObjs) {
+        const uploadRes = await uploadFile(file, activeSessionId);
+        activeSessionId = uploadRes.session_id;
+      }
+
+      if (!activeSessionId) {
+        throw new Error("No files were uploaded.");
+      }
+
+      setSessionId(activeSessionId);
+
+      const raidRes = await generateRaid(activeSessionId, (status: GenerationStatusResponse) => {
+        const progress = status.generation?.progress;
+        const message = status.generation?.message;
+        if (typeof progress === "number") {
+          setProcessingPct(progress);
+          setProcessingMsg(Math.min(Math.floor((progress / 100) * 4), 3));
+        }
+        if (message) {
+          setProcessingLabel(message);
+        }
+      });
       setDownloadUrl(raidRes.download_url);
       setRaidRows(flattenRaid(raidRes.data));
 
-      clearInterval(interval);
       setProcessingPct(100);
+      setProcessingLabel("RAID register ready.");
       setTimeout(() => setStage("result"), 400);
-    } catch (err: any) {
-      clearInterval(interval);
-      setErrorMsg(err.message || "Something went wrong. Please try again.");
+    } catch (err: unknown) {
+      setErrorMsg(getErrorMessage(err));
       setStage("error");
     }
-  };
+  }, [fileObjs]);
 
   // ── Export (backend .xlsx) ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (fileObjs.length === 0 || stage !== "upload") return;
+
+    const timer = setTimeout(() => {
+      void startProcessing();
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [fileObjs, stage, startProcessing]);
 
   const handleExport = () => {
     if (downloadUrl) {
@@ -226,6 +246,7 @@ const RaidDocument = () => {
                     <input
                       ref={fileInputRef}
                       type="file"
+                      multiple
                       accept=".pdf,.docx"
                       className="hidden"
                       onChange={(e) => e.target.files && addFiles(e.target.files)}
@@ -245,7 +266,7 @@ const RaidDocument = () => {
                     <div className="w-16 h-16 rounded-2xl bg-secondary border border-border flex items-center justify-center mx-auto mb-6">
                       <RefreshCw className="w-7 h-7 text-primary animate-spin" style={{ animationDuration: "2s" }} />
                     </div>
-                    <h2 className="text-[22px] font-semibold text-foreground mb-2">{PROCESSING_MESSAGES[processingMsg]}</h2>
+                    <h2 className="text-[22px] font-semibold text-foreground mb-2">{processingLabel}</h2>
                     <p className="text-sm text-muted-foreground mb-8">Analyzing {fileNames.length} document{fileNames.length > 1 ? "s" : ""}</p>
                     <div className="w-full bg-secondary border border-border rounded-full h-1.5 overflow-hidden">
                       <div className="h-full bg-primary rounded-full transition-all duration-500 ease-out" style={{ width: `${processingPct}%` }} />

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import AppSidebar from "@/components/AppSidebar";
-import { uploadFile, generatePfd } from "@/lib/api";
+import { uploadFile, generatePfd, type GenerationStatusResponse } from "@/lib/api";
 import {
   ArrowLeft,
   ArrowRight,
@@ -56,12 +56,6 @@ const PROCESSING_MESSAGES = [
   "Identifying actors and steps…",
   "Mapping process logic…",
   "Building flow structure…",
-];
-
-const GENERATING_MESSAGES = [
-  "Designing your diagram…",
-  "Structuring flows…",
-  "Rendering visual nodes…",
 ];
 
 // ─── Mock Mermaid diagrams per style ─────────────────────────────────────────
@@ -223,6 +217,7 @@ const ProcessFlowDiagram = () => {
   const [processingMsg, setProcessingMsg] = useState(0);
   const [processingPct, setProcessingPct] = useState(0);
   const [generatingMsg, setGeneratingMsg] = useState(0);
+  const [generatingLabel, setGeneratingLabel] = useState("Designing your diagram...");
   const [selectedFlow, setSelectedFlow] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<"flowchart" | "swimlane" | "sequence" | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -269,8 +264,12 @@ const ProcessFlowDiagram = () => {
     }, 400);
 
     try {
-      const res = await uploadFile(fileObjs[0]);
-      setSessionId(res.session_id);
+      let activeSessionId: string | null = null;
+      for (const file of fileObjs) {
+        const res = await uploadFile(file, activeSessionId ?? undefined);
+        activeSessionId = res.session_id;
+      }
+      setSessionId(activeSessionId);
       clearInterval(interval);
       setProcessingPct(100);
       setProcessingMsg(PROCESSING_MESSAGES.length - 1);
@@ -289,23 +288,32 @@ const ProcessFlowDiagram = () => {
     if (!sessionId || !selectedFlow || !selectedStyle) return;
 
     setGeneratingMsg(0);
-    const t1 = setTimeout(() => setGeneratingMsg(1), 600);
-    const t2 = setTimeout(() => setGeneratingMsg(2), 1200);
+    setGeneratingLabel("Designing your diagram...");
 
-    generatePfd({ session_id: sessionId, flow_type: selectedFlow, style: selectedStyle })
+    generatePfd({
+      session_id: sessionId,
+      flow_type: selectedFlow,
+      style: selectedStyle,
+      onProgress: (status: GenerationStatusResponse) => {
+        const progress = status.generation?.progress;
+        const message = status.generation?.message;
+        if (typeof progress === "number") {
+          setGeneratingMsg(Math.min(Math.floor((progress / 100) * 3), 2));
+        }
+        if (message) {
+          setGeneratingLabel(message);
+        }
+      },
+    })
       .then((res) => {
-        clearTimeout(t1); clearTimeout(t2);
         setMermaidCode(res.mermaid_code);
         setStage("preview");
       })
       .catch((err) => {
-        clearTimeout(t1); clearTimeout(t2);
         setApiError(err instanceof Error ? err.message : "Generation failed");
         setStage("choose-style");
       });
-
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [stage]);
+  }, [selectedFlow, selectedStyle, sessionId, stage]);
 
   // ── Mermaid render ────────────────────────────────────────────────────────
 
@@ -515,13 +523,13 @@ const ProcessFlowDiagram = () => {
                   </div>
                   <div className="text-center">
                     <p className="text-[14px] text-foreground">Drop files here or <span className="text-primary">browse</span></p>
-                    <p className="font-mono-label text-[11px] text-muted-foreground mt-1 tracking-wider">PDF · DOCX · TXT</p>
+                    <p className="font-mono-label text-[11px] text-muted-foreground mt-1 tracking-wider">PDF · DOCX</p>
                   </div>
                   <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.docx,.txt"
+                    accept=".pdf,.docx"
                     className="hidden"
                     onChange={(e) => e.target.files && addFiles(e.target.files)}
                   />
@@ -609,7 +617,7 @@ const ProcessFlowDiagram = () => {
                   <div className="inline-flex items-center gap-2 bg-secondary border border-border rounded-[20px] py-1.5 px-3.5">
                     <span className="w-1.5 h-1.5 rounded-sm bg-primary flex-shrink-0" />
                     <span className="font-mono-label text-xs text-foreground tracking-wide">
-                      We identified {files.length * 2 + 3} flows across your documents
+                      {files.length} document{files.length === 1 ? "" : "s"} ready for flow generation
                     </span>
                   </div>
                 </div>
@@ -667,7 +675,7 @@ const ProcessFlowDiagram = () => {
                   {DIAGRAM_STYLES.map((style, i) => (
                     <button
                       key={style.id}
-                      onClick={() => { setSelectedStyle(style.id); setTimeout(() => setStage("generating"), 180); }}
+                      onClick={() => { setApiError(null); setSelectedStyle(style.id); setTimeout(() => setStage("generating"), 180); }}
                       className="group text-left flex flex-col rounded-2xl border bg-card border-border
                         hover:border-primary hover:-translate-y-[4px] hover:shadow-[0_0_0_1px_rgba(59,130,246,0.15),0_8px_32px_rgba(59,130,246,0.08)]
                         transition-all duration-200 animate-fade-up overflow-hidden"
@@ -702,7 +710,7 @@ const ProcessFlowDiagram = () => {
                     </div>
                   </div>
                   <h2 className="text-[22px] font-semibold text-foreground mb-2">
-                    {GENERATING_MESSAGES[generatingMsg]}
+                    {generatingLabel}
                   </h2>
                   <p className="text-sm text-muted-foreground">
                     Building your {DIAGRAM_STYLES.find(s => s.id === selectedStyle)?.title.toLowerCase()}…

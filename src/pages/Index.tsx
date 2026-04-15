@@ -9,7 +9,7 @@ const Index = () => {
       <AppSidebar />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <TopBar title="Dashboard" />
+        <TopBar title="Invuric Business Analyst Dashboard" />
 
         <main className="flex-1 overflow-y-auto">
           <div className="glow-top">

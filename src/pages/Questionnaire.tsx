@@ -987,8 +987,12 @@ const Questionnaire = () => {
     ? "FRD — Functional Requirements Document"
     : "SOW — Statement of Work";
 
+  const DRAFT_KEY = `invuric_answers_${docType.toLowerCase()}`;
+
   const [currentSection, setCurrentSection] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}"); } catch { return {}; }
+  });
   const [guidedMode, setGuidedMode] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
@@ -1030,7 +1034,10 @@ const Questionnaire = () => {
     setAnswers((prev) => ({ ...prev, [id]: value }));
     setSaveStatus("idle");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => setSaveStatus("saved"), 800);
+    saveTimer.current = setTimeout(() => {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...answers, [id]: value }));
+      setSaveStatus("saved");
+    }, 800);
   };
 
   const handleSkip = (id: string) => {
@@ -1060,7 +1067,7 @@ const Questionnaire = () => {
   };
 
   const handleGenerate = () => {
-    sessionStorage.setItem("invuric_answers", JSON.stringify(answers));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(answers));
     const sid = searchParams.get("session_id") || "";
     const dest = sid
       ? `${generateRoute}&session_id=${sid}`
