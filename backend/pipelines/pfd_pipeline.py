@@ -1,3 +1,4 @@
+from config import settings
 from llm import complete_text
 
 FLOW_DESCRIPTIONS = {
@@ -57,7 +58,7 @@ Flow Type: {flow_desc}
 Diagram Style: {style_desc}
 
 Project or System Context:
-{raw_text[:80_000] if raw_text else "Generic enterprise web application with user authentication, data management, and reporting features. Create a representative, realistic example flow."}
+{raw_text[:settings.generation_input_max_chars] if raw_text else "Generic enterprise web application with user authentication, data management, and reporting features. Create a representative, realistic example flow."}
 
 Requirements:
 - Apply all syntax rules from your system instructions.

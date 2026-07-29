@@ -90,12 +90,26 @@ _RETRY_MAX_ATTEMPTS = 4          # 1 original + 3 retries
 _RETRY_BASE_DELAY_SECONDS = 2.0  # doubles each attempt: 2s, 4s, 8s
 
 
+def _build_message_content(user_content: str, images: list[dict] | None) -> str | list[dict]:
+    """Plain text, unless images are attached (vision - Backlog/User Stories only),
+    in which case each image becomes its own content block ahead of the text."""
+    if not images:
+        return user_content
+    blocks = [
+        {"type": "image", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}}
+        for image in images
+    ]
+    blocks.append({"type": "text", "text": user_content})
+    return blocks
+
+
 async def _create_message(
     *,
     system_prompt: str,
     user_content: str,
     temperature: float,
     max_tokens: int,
+    images: list[dict] | None = None,
 ):
     """Call the Anthropic API with exponential-backoff retry for transient errors.
 
@@ -105,6 +119,7 @@ async def _create_message(
     """
     client = _get_client()
     last_exc: Exception | None = None
+    message_content = _build_message_content(user_content, images)
 
     for attempt in range(_RETRY_MAX_ATTEMPTS):
         started = time.perf_counter()
@@ -114,7 +129,7 @@ async def _create_message(
                 max_tokens=max_tokens,
                 temperature=temperature,
                 system=system_prompt,
-                messages=[{"role": "user", "content": user_content}],
+                messages=[{"role": "user", "content": message_content}],
             )
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
             LOGGER.info(
@@ -231,6 +246,7 @@ async def complete_json(
     schema: type[ModelT] | None = None,
     temperature: float = 0.2,
     max_tokens: int = DEFAULT_JSON_MAX_TOKENS,
+    images: list[dict] | None = None,
 ) -> dict:
     current_user_content = user_content
     current_temperature = temperature
@@ -243,6 +259,7 @@ async def complete_json(
                 user_content=current_user_content,
                 temperature=current_temperature,
                 max_tokens=max_tokens,
+                images=images,
             )
             full_text = _extract_text_content(response)
             payload = _coerce_json_payload(full_text)

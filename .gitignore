@@ -33,5 +33,7 @@ __pycache__/
 venv/
 *.egg-info/
 backend/tests/.tmp/
+backend/.local_backend/
 .omc/
 backend/.omc/
+.vercel

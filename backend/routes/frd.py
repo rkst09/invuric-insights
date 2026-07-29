@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Literal
 
+from auth import CurrentUser, assert_session_access, get_current_user
 from database import get_client_template_for_session
 from generation_jobs import queue_and_dispatch
 
@@ -16,7 +17,8 @@ class GenerateRequest(BaseModel):
 
 
 @router.post("")
-async def generate_frd(req: GenerateRequest):
+async def generate_frd(req: GenerateRequest, current_user: CurrentUser = Depends(get_current_user)):
+    assert_session_access(req.session_id, current_user)
     client_template = get_client_template_for_session(req.session_id) if req.template == "client" else None
     if req.template == "client" and not client_template:
         raise HTTPException(status_code=400, detail="Please upload a client template before generating this document.")

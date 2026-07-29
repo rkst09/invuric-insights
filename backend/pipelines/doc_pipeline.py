@@ -1,3 +1,4 @@
+from config import settings
 from llm import complete_json
 from structured_outputs import FRDDocumentModel, PRDDocumentModel, SOWDocumentModel
 
@@ -256,15 +257,11 @@ SYSTEM_PROMPTS = {"sow": SOW_PROMPT, "prd": PRD_PROMPT, "frd": FRD_PROMPT}
 OUTPUT_SCHEMAS = {"sow": SOWDocumentModel, "prd": PRDDocumentModel, "frd": FRDDocumentModel}
 # Increased token budgets — Claude Sonnet 4 supports up to 64K output tokens.
 # FRD/PRD schemas require 12+ items across multiple arrays; 10K was borderline.
-MAX_TOKENS = {"sow": 12000, "prd": 16000, "frd": 14000}
+MAX_TOKENS = {"sow": 8000, "prd": 10000, "frd": 10000}
 
 # Input context limit — Claude has 200K input context. 9000 chars (~2250 tokens)
 # was discarding most of uploaded documents. 80000 chars (~20000 tokens) gives
 # Claude the full picture while leaving ample room for the system prompt + output.
-_MAX_INPUT_CHARS = 80_000
-_MAX_TEMPLATE_CHARS = 20_000
-
-
 async def run_doc_pipeline(doc_type: str, raw_text: str, answers: dict, template_context: str = "") -> dict:
     system_prompt = SYSTEM_PROMPTS[doc_type]
     metadata_lines = "\n".join(f"  {key}: {answers.get(key, '')}" for key in METADATA_KEYS)
@@ -272,12 +269,12 @@ async def run_doc_pipeline(doc_type: str, raw_text: str, answers: dict, template
     answers_lines = "\n".join(f"  - {key}: {value}" for key, value in other_answers.items())
 
     doc_context = (
-        raw_text[:_MAX_INPUT_CHARS]
+        raw_text[:settings.generation_input_max_chars]
         if raw_text
         else "No document uploaded - generate the full document from scratch using the questionnaire answers above, inferring any missing specifics from the project domain."
     )
     template_block = (
-        template_context[:_MAX_TEMPLATE_CHARS]
+        template_context[:settings.generation_template_max_chars]
         if template_context
         else "No client template was provided. Use the standard Invuric structure unless the questionnaire explicitly says otherwise."
     )

@@ -227,7 +227,14 @@ const UserStories = () => {
                       <p className="text-[14px] font-semibold text-foreground">UI screens</p>
                       <span className="font-mono-label text-[10px] text-muted-foreground bg-secondary border border-border rounded px-2 py-0.5">OPTIONAL</span>
                     </div>
-                    <p className="text-[12px] text-muted-foreground mb-4">AI uses screens to understand flows more accurately</p>
+                    <p className="text-[12px] text-muted-foreground mb-3">AI looks directly at these screens/pages to understand flows more accurately</p>
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3.5 py-2.5 mb-4">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                        Screens and PDF pages here are sent to Claude exactly as uploaded and are <span className="font-medium">not redacted</span> —
+                        don't include screens showing real customer names, emails, or other personal data.
+                      </p>
+                    </div>
                     <div
                       onDragOver={(e) => { e.preventDefault(); setIsDraggingScreen(true); }}
                       onDragLeave={() => setIsDraggingScreen(false)}
@@ -236,16 +243,23 @@ const UserStories = () => {
                       className={`rounded-xl border-2 border-dashed cursor-pointer flex flex-col items-center justify-center gap-2 py-7 transition-all duration-200
                         ${isDraggingScreen ? "border-primary bg-[hsl(215_50%_5%)]" : "border-[hsl(0_0%_14%)] hover:border-[hsl(0_0%_24%)] bg-[hsl(0_0%_5%)]"}`}>
                       <Image className="w-5 h-5 text-muted-foreground" />
-                      <p className="text-[13px] text-foreground">Drop screens here or <span className="text-primary">browse</span></p>
-                      <p className="font-mono-label text-[10px] text-muted-foreground tracking-wider">PNG · JPG</p>
-                      <input ref={screenInputRef} type="file" multiple accept="image/*" className="hidden"
+                      <p className="text-[13px] text-foreground">Drop screens or PDFs here or <span className="text-primary">browse</span></p>
+                      <p className="font-mono-label text-[10px] text-muted-foreground tracking-wider">PNG · JPG · PDF</p>
+                      <input ref={screenInputRef} type="file" multiple accept="image/*,.pdf" className="hidden"
                         onChange={(e) => e.target.files && addScreenFiles(e.target.files)} />
                     </div>
                     {screenFiles.length > 0 && (
                       <div className="mt-3 grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                         {screenFiles.map(f => (
                           <div key={f.id} className="relative group rounded-lg overflow-hidden border border-border aspect-video bg-secondary">
-                            <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
+                            {f.file.type.startsWith("image/") ? (
+                              <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 px-2 text-center">
+                                <FileText className="w-5 h-5 text-primary shrink-0" />
+                                <p className="text-[10px] text-muted-foreground truncate w-full">{f.name}</p>
+                              </div>
+                            )}
                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <button onClick={() => setScreenFiles(p => p.filter(x => x.id !== f.id))}
                                 className="p-1.5 rounded-full bg-background/80 text-foreground hover:bg-background transition-colors">

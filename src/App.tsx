@@ -3,10 +3,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import AppErrorBoundary from "@/components/AppErrorBoundary";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+const Login = lazy(() => import("./pages/Login.tsx"));
 const Index = lazy(() => import("./pages/Index.tsx"));
 const ChooseDocumentType = lazy(() => import("./pages/ChooseDocumentType.tsx"));
 const ChoosePath = lazy(() => import("./pages/ChoosePath.tsx"));
@@ -53,24 +56,27 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppErrorBoundary>
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/document-generation" element={<ChooseDocumentType />} />
-              <Route path="/choose-path" element={<ChoosePath />} />
-              <Route path="/history" element={<PreviousProjects />} />
-              <Route path="/questionnaire" element={<Questionnaire />} />
-              <Route path="/upload-gap-flow" element={<UploadGapFlow />} />
-              <Route path="/output-format" element={<OutputFormat />} />
-              <Route path="/process-flow" element={<ProcessFlowDiagram />} />
-              <Route path="/raid-document" element={<RaidDocument />} />
-              <Route path="/wbs-generator" element={<WBSGenerator />} />
-              <Route path="/user-stories" element={<UserStories />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </AppErrorBoundary>
+        <AuthProvider>
+          <AppErrorBoundary>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+                <Route path="/document-generation" element={<ProtectedRoute><ChooseDocumentType /></ProtectedRoute>} />
+                <Route path="/choose-path" element={<ProtectedRoute><ChoosePath /></ProtectedRoute>} />
+                <Route path="/history" element={<ProtectedRoute><PreviousProjects /></ProtectedRoute>} />
+                <Route path="/questionnaire" element={<ProtectedRoute><Questionnaire /></ProtectedRoute>} />
+                <Route path="/upload-gap-flow" element={<ProtectedRoute><UploadGapFlow /></ProtectedRoute>} />
+                <Route path="/output-format" element={<ProtectedRoute><OutputFormat /></ProtectedRoute>} />
+                <Route path="/process-flow" element={<ProtectedRoute><ProcessFlowDiagram /></ProtectedRoute>} />
+                <Route path="/raid-document" element={<ProtectedRoute><RaidDocument /></ProtectedRoute>} />
+                <Route path="/wbs-generator" element={<ProtectedRoute><WBSGenerator /></ProtectedRoute>} />
+                <Route path="/user-stories" element={<ProtectedRoute><UserStories /></ProtectedRoute>} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </AppErrorBoundary>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

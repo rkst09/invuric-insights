@@ -3,12 +3,28 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
+const backendTarget = process.env.VITE_BACKEND_PROXY_TARGET || "http://127.0.0.1:8011";
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
     host: "0.0.0.0",
     port: 5173,
     strictPort: false,
+    proxy: {
+      "/api": {
+        target: backendTarget,
+        changeOrigin: true,
+      },
+      "/health": {
+        target: backendTarget,
+        changeOrigin: true,
+      },
+      "/ready": {
+        target: backendTarget,
+        changeOrigin: true,
+      },
+    },
     hmr: {
       overlay: false,
     },

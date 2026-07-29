@@ -5,12 +5,12 @@ Invuric BA Agent — Document Generator
 """
 
 import copy, io, os, re, shutil
+from datetime import UTC, datetime
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from datetime import datetime
 
 FONT = "Neue Haas Grotesk Text Pro"
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates")
@@ -25,6 +25,10 @@ HEX_SLATE  = "F0F4F8"   # light cool-gray for cover page footer band
 GANTT_CHAR = "\u2588\u2588\u2588\u2588\u2588\u2588"
 
 GANTT_COLS = [(1,2),(3,4),(5,6),(7,8),(9,10),(11,12),(13,16)]
+
+
+def _utc_date(fmt: str) -> str:
+    return datetime.now(UTC).strftime(fmt)
 
 
 # ── Low-level XML helpers ─────────────────────────────────────────────────────
@@ -247,7 +251,7 @@ def _sow_cover(doc, metadata):
     tbl = doc.tables[0]
     cover_cell = tbl.rows[0].cells[2]
     client = metadata.get("client_name", "")
-    today  = datetime.utcnow().strftime("%d %B %Y")
+    today = _utc_date("%d %B %Y")
     paras = cover_cell.paragraphs
 
     for para in paras:
@@ -328,7 +332,7 @@ def _sow_cover(doc, metadata):
 
 def _sow_metadata_table(doc, metadata):
     tbl = doc.tables[1]
-    today = datetime.utcnow().strftime("%d/%m/%Y")
+    today = _utc_date("%d/%m/%Y")
     _set_cell_text(tbl.rows[0].cells[1], metadata.get("project_id", ""))
     _set_cell_text(tbl.rows[0].cells[3], metadata.get("project_name", ""))
     _set_cell_text(tbl.rows[1].cells[1], metadata.get("author", ""))
@@ -526,7 +530,7 @@ def _footer(doc, doc_type: str):
         fp = sec.footer.paragraphs[0]
         fp.clear()
         run = fp.add_run(
-            f"Invuric  ·  {doc_type}  ·  {datetime.utcnow().strftime('%B %Y')}  ·  CONFIDENTIAL"
+            f"Invuric  ·  {doc_type}  ·  {_utc_date('%B %Y')}  ·  CONFIDENTIAL"
         )
         _style_run(run, size=8, color_hex="888888")
         fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -585,7 +589,7 @@ def _cover(doc, title: str, metadata: dict):
     _style_run(prepared_run, size=10, bold=True, color_hex="334155")
     sep_run = p3.add_run("  ·  ")
     _style_run(sep_run, size=10, color_hex="94A3B8")
-    date_run = p3.add_run(datetime.utcnow().strftime("%d %B %Y"))
+    date_run = p3.add_run(_utc_date("%d %B %Y"))
     _style_run(date_run, size=10, color_hex="334155")
     p3.paragraph_format.space_before = Pt(14)
     p3.paragraph_format.space_after  = Pt(14)
@@ -601,8 +605,8 @@ def _metadata_table(doc, metadata: dict, req_label="Requestor"):
          "Name of the Project",  metadata.get("project_name", "")),
         ("Author",               metadata.get("author", ""),
          req_label,              metadata.get("requestor", "")),
-        ("Date Created",         datetime.utcnow().strftime("%d/%m/%Y"),
-         "Date Submitted",       datetime.utcnow().strftime("%d/%m/%Y")),
+        ("Date Created",         _utc_date("%d/%m/%Y"),
+         "Date Submitted",       _utc_date("%d/%m/%Y")),
         ("Estimated Start Date", metadata.get("start_date", ""),
          "Estimated End Date",   metadata.get("end_date", "")),
     ]

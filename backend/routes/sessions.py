@@ -1,12 +1,14 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from auth import CurrentUser, assert_session_access, get_current_user
 from database import (
     create_output_signed_url,
+    execute_query,
     get_generation_state,
     get_latest_output_record,
-    get_session_record,
     get_supabase,
     merge_session_metadata,
+    run_external_operation,
 )
 from errors import StorageServiceError
 
@@ -23,31 +25,38 @@ class UpdateSessionRequest(BaseModel):
 
 
 @router.post("")
-def create_session(req: CreateSessionRequest):
+def create_session(req: CreateSessionRequest, current_user: CurrentUser = Depends(get_current_user)):
     db = get_supabase()
-    result = db.table("sessions").insert({
+    result = execute_query("create_session", db.table("sessions").insert({
         "project_name": req.metadata.get("project_name", "Untitled Project"),
         "status": "created",
         "module_type": req.module_type,
         "metadata": req.metadata,
-    }).execute()
+        "org_id": current_user.org_id,
+    }))
     return result.data[0]
 
 
 @router.get("/{session_id}")
-def get_session(session_id: str):
+def get_session(session_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    assert_session_access(session_id, current_user)
     db = get_supabase()
-    result = db.table("sessions").select("*, documents(*), outputs(*)").eq("id", session_id).limit(1).execute()
+    result = execute_query(
+        "get_session",
+        db.table("sessions").select("*, documents(*), outputs(*)").eq("id", session_id).limit(1),
+    )
     if not result.data:
         raise HTTPException(404, "Session not found")
     return result.data[0]
 
 
 @router.get("/{session_id}/generation")
-def get_generation_status(session_id: str, module_type: str | None = None):
-    session = get_session_record(session_id)
-    if not session:
-        raise HTTPException(404, "Session not found")
+def get_generation_status(
+    session_id: str,
+    module_type: str | None = None,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    session = assert_session_access(session_id, current_user)
 
     generation = get_generation_state(session_id, module_type) or {}
     resolved_module = module_type or generation.get("module_type") or session.get("module_type")
@@ -83,24 +92,32 @@ def get_generation_status(session_id: str, module_type: str | None = None):
 
 
 @router.patch("/{session_id}")
-def update_session(session_id: str, req: UpdateSessionRequest):
-    if not get_session_record(session_id):
-        raise HTTPException(404, "Session not found")
+def update_session(
+    session_id: str,
+    req: UpdateSessionRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    assert_session_access(session_id, current_user)
     updated = merge_session_metadata(session_id, req.metadata)
     return updated
 
 
 @router.get("/{session_id}/outputs/{output_type}/download")
-def download_output(session_id: str, output_type: str):
+def download_output(
+    session_id: str,
+    output_type: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    assert_session_access(session_id, current_user)
     db = get_supabase()
-    result = (
+    result = execute_query(
+        "download_output",
         db.table("outputs")
         .select("storage_path, generated_at")
         .eq("session_id", session_id)
         .eq("output_type", output_type)
         .order("generated_at", desc=True)
-        .limit(1)
-        .execute()
+        .limit(1),
     )
     row = result.data[0] if result.data else None
     if not row:
@@ -113,42 +130,50 @@ def download_output(session_id: str, output_type: str):
 
 
 @router.delete("/{session_id}")
-def delete_session(session_id: str):
+def delete_session(session_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    assert_session_access(session_id, current_user)
     db = get_supabase()
 
     # Best-effort: delete storage files for outputs
-    outputs = db.table("outputs").select("storage_path").eq("session_id", session_id).execute()
+    outputs = execute_query(
+        "delete_session_select_outputs",
+        db.table("outputs").select("storage_path").eq("session_id", session_id),
+    )
     for row in (outputs.data or []):
         try:
-            db.storage.from_("outputs").remove([row["storage_path"]])
+            run_external_operation("delete_session_remove_output", lambda row=row: db.storage.from_("outputs").remove([row["storage_path"]]))
         except Exception:
             pass
 
     # Best-effort: delete uploaded document files
-    docs = db.table("documents").select("storage_path").eq("session_id", session_id).execute()
+    docs = execute_query(
+        "delete_session_select_documents",
+        db.table("documents").select("storage_path").eq("session_id", session_id),
+    )
     for row in (docs.data or []):
         try:
-            db.storage.from_("documents").remove([row["storage_path"]])
+            run_external_operation("delete_session_remove_document", lambda row=row: db.storage.from_("documents").remove([row["storage_path"]]))
         except Exception:
             pass
 
     # Delete DB rows (child tables first)
-    db.table("outputs").delete().eq("session_id", session_id).execute()
-    db.table("extracted_data").delete().eq("session_id", session_id).execute()
-    db.table("documents").delete().eq("session_id", session_id).execute()
-    db.table("sessions").delete().eq("id", session_id).execute()
+    execute_query("delete_session_outputs", db.table("outputs").delete().eq("session_id", session_id))
+    execute_query("delete_session_extracted_data", db.table("extracted_data").delete().eq("session_id", session_id))
+    execute_query("delete_session_documents", db.table("documents").delete().eq("session_id", session_id))
+    execute_query("delete_session_session", db.table("sessions").delete().eq("id", session_id))
 
     return {"deleted": session_id}
 
 
 @router.get("")
-def list_sessions(limit: int = 20):
+def list_sessions(limit: int = 20, current_user: CurrentUser = Depends(get_current_user)):
     db = get_supabase()
-    result = (
+    result = execute_query(
+        "list_sessions",
         db.table("sessions")
         .select("id, module_type, status, created_at, metadata, project_name")
+        .eq("org_id", current_user.org_id)
         .order("created_at", desc=True)
-        .limit(limit)
-        .execute()
+        .limit(limit),
     )
     return result.data

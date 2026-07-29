@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from auth import CurrentUser, assert_session_access, get_current_user
 from generation_jobs import queue_and_dispatch
 
 router = APIRouter()
@@ -12,7 +13,8 @@ class GenerateRequest(BaseModel):
 
 
 @router.post("")
-async def generate_wbs(req: GenerateRequest):
+async def generate_wbs(req: GenerateRequest, current_user: CurrentUser = Depends(get_current_user)):
+    assert_session_access(req.session_id, current_user)
     return queue_and_dispatch(
         req.session_id,
         "wbs",

@@ -9,7 +9,7 @@ import {
   downloadDocument, previewDocument, deleteProject,
 } from "@/lib/api";
 
-type DocType = "SOW" | "PRD" | "FRD" | "RAID" | "WBS" | "Stories";
+type DocType = "SOW" | "PRD" | "FRD" | "RAID" | "WBS" | "Stories" | "PFD";
 type Status = "Complete" | "In Progress" | "Draft";
 
 interface ProjectDoc {
@@ -43,7 +43,7 @@ interface Project {
 
 const MODULE_TO_PILL: Record<string, DocType> = {
   sow: "SOW", prd: "PRD", frd: "FRD",
-  raid: "RAID", wbs: "WBS", backlog: "Stories", pfd: "SOW",
+  raid: "RAID", wbs: "WBS", backlog: "Stories", pfd: "PFD",
 };
 
 const STATUS_MAP: Record<string, Status> = {
@@ -111,7 +111,7 @@ function sessionToProject(s: SessionDetail): Project {
   };
 }
 
-const FILTERS = ["All", "SOW", "PRD", "FRD", "RAID", "WBS", "Stories"] as const;
+const FILTERS = ["All", "SOW", "PRD", "FRD", "RAID", "WBS", "Stories", "PFD"] as const;
 
 const pillStyles: Record<DocType, string> = {
   SOW: "bg-[hsl(217_50%_18%)] text-primary border border-[hsl(217_50%_28%)]",
@@ -120,6 +120,7 @@ const pillStyles: Record<DocType, string> = {
   RAID: "bg-[hsl(140_20%_12%)] text-[hsl(142_71%_45%)] border border-[hsl(140_30%_18%)]",
   WBS: "bg-[hsl(35_20%_12%)] text-[hsl(38_92%_50%)] border border-[hsl(35_30%_18%)]",
   Stories: "bg-[hsl(270_25%_14%)] text-[hsl(263_70%_76%)] border border-[hsl(270_30%_20%)]",
+  PFD: "bg-[hsl(190_45%_14%)] text-[hsl(190_80%_60%)] border border-[hsl(190_35%_22%)]",
 };
 
 const statusBarColor: Record<Status, string> = {

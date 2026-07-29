@@ -10,12 +10,13 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from auth import CurrentUser, get_current_user
 from config import settings
 from database import check_db_connectivity
 from errors import ExternalServiceError
@@ -39,6 +40,22 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Invuric BA Agent API", version="1.0.0", lifespan=lifespan)
+
+if settings.dev_bypass_auth:
+    if settings.environment.lower() == "production":
+        raise RuntimeError("DEV_BYPASS_AUTH must never be enabled when ENVIRONMENT=production.")
+    LOGGER.warning(
+        "AUTH IS DISABLED (DEV_BYPASS_AUTH=true) — every request is treated as a fake "
+        "local dev user. This must never be set outside local testing."
+    )
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        user_id="00000000-0000-0000-0000-000000000001",
+        email="dev@invuric.co",
+        # Must be a real row in `organizations` - sessions.org_id has a foreign key
+        # constraint, so a made-up UUID 500s on every insert. This is the actual
+        # "Invuric" org row already in Supabase, not a fake placeholder.
+        org_id="2d0b114b-ea8e-42d2-8895-d415e46076ec",
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -192,16 +209,18 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
-app.include_router(system.router, prefix="/api/system", tags=["system"])
-app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
-app.include_router(sow.router, prefix="/api/generate/sow", tags=["sow"])
-app.include_router(prd.router, prefix="/api/generate/prd", tags=["prd"])
-app.include_router(frd.router, prefix="/api/generate/frd", tags=["frd"])
-app.include_router(raid.router, prefix="/api/generate/raid", tags=["raid"])
-app.include_router(wbs.router, prefix="/api/generate/wbs", tags=["wbs"])
-app.include_router(backlog.router, prefix="/api/generate/backlog", tags=["backlog"])
-app.include_router(pfd.router, prefix="/api/generate/pfd", tags=["pfd"])
+_auth_dep = [Depends(get_current_user)]
+
+app.include_router(upload.router, prefix="/api/upload", tags=["upload"], dependencies=_auth_dep)
+app.include_router(system.router, prefix="/api/system", tags=["system"], dependencies=_auth_dep)
+app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"], dependencies=_auth_dep)
+app.include_router(sow.router, prefix="/api/generate/sow", tags=["sow"], dependencies=_auth_dep)
+app.include_router(prd.router, prefix="/api/generate/prd", tags=["prd"], dependencies=_auth_dep)
+app.include_router(frd.router, prefix="/api/generate/frd", tags=["frd"], dependencies=_auth_dep)
+app.include_router(raid.router, prefix="/api/generate/raid", tags=["raid"], dependencies=_auth_dep)
+app.include_router(wbs.router, prefix="/api/generate/wbs", tags=["wbs"], dependencies=_auth_dep)
+app.include_router(backlog.router, prefix="/api/generate/backlog", tags=["backlog"], dependencies=_auth_dep)
+app.include_router(pfd.router, prefix="/api/generate/pfd", tags=["pfd"], dependencies=_auth_dep)
 
 
 
