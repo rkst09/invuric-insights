@@ -56,6 +56,18 @@ if settings.dev_bypass_auth:
         # "Invuric" org row already in Supabase, not a fake placeholder.
         org_id="2d0b114b-ea8e-42d2-8895-d415e46076ec",
     )
+elif settings.auth_paused:
+    LOGGER.warning(
+        "AUTH IS PAUSED (AUTH_PAUSED=true) — Microsoft/Azure login enforcement is "
+        "disabled in this environment, including production. Every request is "
+        "treated as a shared placeholder user. Set AUTH_PAUSED=false to re-enable "
+        "real authentication."
+    )
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        user_id="00000000-0000-0000-0000-000000000001",
+        email="dev@invuric.co",
+        org_id="2d0b114b-ea8e-42d2-8895-d415e46076ec",
+    )
 
 app.add_middleware(
     CORSMiddleware,

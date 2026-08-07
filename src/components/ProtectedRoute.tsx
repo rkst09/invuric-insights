@@ -11,10 +11,19 @@ if (DEV_BYPASS_AUTH) {
   console.warn("AUTH IS DISABLED (VITE_DEV_BYPASS_AUTH=true) — every route is unlocked.");
 }
 
+// TEMPORARY: Microsoft login is paused in every environment, including production,
+// per explicit decision on 2026-08-07 — the Azure app registration isn't set up yet.
+// Flip back to false once Microsoft sign-in is ready to re-enable the login gate.
+const AUTH_PAUSED = true;
+if (AUTH_PAUSED) {
+  // eslint-disable-next-line no-console
+  console.warn("AUTH IS PAUSED (AUTH_PAUSED) — Microsoft login is temporarily disabled.");
+}
+
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { session, loading } = useAuth();
 
-  if (DEV_BYPASS_AUTH) {
+  if (DEV_BYPASS_AUTH || AUTH_PAUSED) {
     return <>{children}</>;
   }
 

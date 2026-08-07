@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     # DANGER: bypasses all authentication with a fake local user. Local/dev testing
     # only - main.py refuses to start with this on when environment=production.
     dev_bypass_auth: bool = False
+    # TEMPORARY: pauses Microsoft/Azure login enforcement in ALL environments,
+    # including production, per explicit decision on 2026-08-07 to ship without the
+    # Azure app registration configured yet. Unlike dev_bypass_auth, this is allowed
+    # to run in production. Set AUTH_PAUSED=false (or flip the default here) once
+    # Microsoft sign-in is ready to re-enable real authentication.
+    auth_paused: bool = True
     request_log_level: str = "INFO"
     rate_limit_window_seconds: int = 60
     rate_limit_uploads_per_window: int = 12
